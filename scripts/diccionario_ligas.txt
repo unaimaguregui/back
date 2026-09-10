@@ -1,0 +1,240 @@
+1. HNL -> Primera División Croacia
+2. Bundesliga -> Segunda División Alemania
+2. HNL -> Segunda División Croacia
+3. Liga -> Tercera División Alemania
+A-League Men -> Primera División Australia
+Albanian Kategoria Superiore -> Primera División Albania
+Allsvenskan -> Primera División Suecia
+Andorra Primera Divisió -> Primera División Andorra
+Argentina Copa de la Liga -> Copa de la Liga Profesional Argentina
+Argentina LPF -> Primera División Argentina (Liga Profesional)
+Argentina Primera Nacional -> Segunda División Argentina
+Argentina Reserve League -> Liga de Reservas Argentina
+Armenian Premier League -> Primera División Armenia
+Australian NPLs -> Ligas Nacionales Premier Australia (Nivel Regional)
+Austrian 2. Liga -> Segunda División Austria
+Austrian Bundesliga -> Primera División Austria
+Azeri Birinci Dasta -> Segunda División Azerbaiyán
+Azeri Premyer Liqa -> Primera División Azerbaiyán
+BRI Liga 1 -> Primera División Indonesia
+Bahrain Premier League -> Primera División Baréin
+Belarusian 1. Division -> Segunda División Bielorrusia
+Belarusian Premier League -> Primera División Bielorrusia
+Belarusian Reserve League -> Liga de Reservas Bielorrusia
+Belgian First Division B -> Segunda División Bélgica
+Belgian Pro League -> Primera División Bélgica
+Besta-deild karla -> Primera División Islandia
+Bolivian LFPB -> Primera División Bolivia
+Bosnian Premier League -> Primera División Bosnia y Herzegovina
+Botola Pro -> Primera División Marruecos
+Brasileirão -> Primera División Brasil
+Brazil Serie B -> Segunda División Brasil
+Brazil Serie C -> Tercera División Brasil
+Bulgarian First League -> Primera División Bulgaria
+Bundesliga -> Primera División Alemania
+Cambodian Premier League -> Primera División Camboya
+Campeonato de Portugal -> Cuarta División Portugal
+Canadian Premier League -> Primera División Canadá
+Capital Territory NPL -> Liga Regional Australia (Territorio de la Capital)
+Championship -> Segunda División Inglaterra
+Chilean Primera B -> Segunda División Chile
+Chilean Primera Division -> Primera División Chile
+Chilean Primera División -> Primera División Chile
+China League One -> Segunda División China
+China League Two -> Tercera División China
+Chinese Super League -> Primera División China
+Colombian Primera A -> Primera División Colombia
+Colombian Torneo BetPlay -> Segunda División Colombia
+Costa Rican Primera Division -> Primera División Costa Rica
+Costa Rican Primera División -> Primera División Costa Rica
+Cyprus 1. Division -> Primera División Chipre
+Cyprus 2. Division -> Segunda División Chipre
+Czech 1. Liga U19 -> Liga Juvenil Sub-19 República Checa
+Czech FNL -> Segunda División República Checa
+Czech Fortuna Liga -> Primera División República Checa
+Czech U17 League -> Liga Juvenil Sub-17 República Checa
+Danish 1. Division -> Segunda División Dinamarca
+Danish 2. Division -> Tercera División Dinamarca
+Danish 3. Division -> Cuarta División Dinamarca
+Danish U17 Division -> Liga Juvenil Sub-17 Dinamarca (División)
+Danish U17 Ligaen -> Liga Juvenil Sub-17 Dinamarca (Liga)
+Danish U19 Division -> Liga Juvenil Sub-19 Dinamarca (División)
+Danish U19 Ligaen -> Liga Juvenil Sub-19 Dinamarca (Liga)
+Ecuador Liga Pro -> Primera División Ecuador
+Eerste Divisie -> Segunda División Países Bajos
+Egyptian Premier League -> Primera División Egipto
+Ekstraklasa -> Primera División Polonia
+El Salvador Primera Division -> Primera División El Salvador
+El Salvador Primera División -> Primera División El Salvador
+Eliteserien -> Primera División Noruega
+English National League -> Quinta División Inglaterra
+English National League North South -> Sexta División Inglaterra
+English Non-League Premier Division - Step 7 -> Séptima División Inglaterra
+Eredivisie -> Primera División Países Bajos
+Erovnuli Liga -> Primera División Georgia
+Erovnuli Liga 2 -> Segunda División Georgia
+Estonia Meistriliiga -> Primera División Estonia
+Estonian Esiliiga A -> Segunda División Estonia
+Ettan -> Tercera División Suecia
+Faroe Islands Meistaradeildin -> Primera División Islas Feroe
+French National 1 -> Tercera División Francia
+Greek Super League -> Primera División Grecia
+Greek Super League 2 -> Segunda División Grecia
+Greek U19 Super League -> Liga Juvenil Sub-19 Grecia
+Guatemalan Liga Nacional -> Primera División Guatemala
+Honduran Liga Nacional -> Primera División Honduras
+Hong Kong Premier League -> Primera División Hong Kong
+Iceland 1. Deild -> Segunda División Islandia
+Indian Super League -> Primera División India
+Irish First Division -> Segunda División Irlanda
+Irish Premier Division -> Primera División Irlanda
+J1 -> Primera División Japón
+J2 -> Segunda División Japón
+J3 -> Tercera División Japón
+Jordan Pro League -> Primera División Jordania
+K League 1 -> Primera División Corea del Sur
+K League 2 -> Segunda División Corea del Sur
+K3 League -> Tercera División Corea del Sur
+K4 League -> Cuarta División Corea del Sur
+Kazakh 1. Division -> Segunda División Kazajistán
+Kazakh 2. Division -> Tercera División Kazajistán
+Kazakh Premier League -> Primera División Kazajistán
+Kazakh U16 League -> Liga Juvenil Sub-16 Kazajistán
+Kazakh U17 League -> Liga Juvenil Sub-17 Kazajistán
+Kazakh U18 League -> Liga Juvenil Sub-18 Kazajistán
+Kosovo Superliga -> Primera División Kosovo
+Kyrgyz Premier League -> Primera División Kirguistán
+La Liga -> Primera División España
+La Liga 2 -> Segunda División España
+Latvian 1. Liga -> Segunda División Letonia
+Latvian Virsliga -> Primera División Letonia
+League One -> Tercera División Inglaterra
+League Two -> Cuarta División Inglaterra
+Liga Leumit -> Segunda División Israel
+Liga MX -> Primera División México
+Liga de Expansion MX -> Segunda División México
+Liga de Expansión MX -> Segunda División México
+Ligat ha'Al -> Primera División Israel
+Ligue 1 -> Primera División Francia
+Ligue 2 -> Segunda División Francia
+Lithuanian 1 Lyga -> Segunda División Lituania
+Lithuanian A Lyga -> Primera División Lituania
+Luxembourg National Division -> Primera División Luxemburgo
+MLS -> Primera División Estados Unidos
+MLS Next Pro -> Tercera División Estados Unidos (Liga de Reservas)
+Malaysian Super League -> Primera División Malasia
+Malta Challenge League -> Segunda División Malta
+Malta Premier League -> Primera División Malta
+Mexican U17 League -> Liga Juvenil Sub-17 México
+Mexican U18 League -> Liga Juvenil Sub-18 México
+Mexican U19 League -> Liga Juvenil Sub-19 México
+Mexican U23 League -> Liga Juvenil Sub-23 México
+Moldovan Super Liga -> Primera División Moldavia
+Montenegro First League -> Primera División Montenegro
+Montenegro Second League -> Segunda División Montenegro
+NB I -> Primera División Hungría
+NB II -> Segunda División Hungría
+NCAA D2 -> Fútbol Universitario Estados Unidos División 2
+NCAA D3 -> Fútbol Universitario Estados Unidos División 3
+New South Wales NPL -> Liga Regional Australia (Nueva Gales del Sur)
+New Zealand National League -> Primera División Nueva Zelanda
+Nicaragua Primera Division -> Primera División Nicaragua
+Nigerian Creative Championship -> Liga de Desarrollo Nigeria
+North Macedonia First League -> Primera División Macedonia del Norte
+Northern Irish Premiership -> Primera División Irlanda del Norte
+Norwegian 2. Division -> Tercera División Noruega
+OBOS Ligaen -> Segunda División Noruega
+Panama LPF -> Primera División Panamá
+Paraguay Division Profesional -> Primera División Paraguay
+Peruvian Liga 1 -> Primera División Perú
+Polish I Liga -> Segunda División Polonia
+Polish II Liga -> Tercera División Polonia
+Portuguese Juniores U17 -> Liga Juvenil Sub-17 Portugal
+Portuguese Juniores U19 -> Liga Juvenil Sub-19 Portugal
+Portuguese Júniores U17 -> Liga Juvenil Sub-17 Portugal
+Portuguese Júniores U19 -> Liga Juvenil Sub-19 Portugal
+Portuguese Liga 3 -> Tercera División Portugal
+Portuguese Liga Revelacao Sub 23 -> Liga Sub-23 Portugal (Revelación)
+Portuguese Liga Revelação Sub 23 -> Liga Sub-23 Portugal (Revelación)
+Portuguese Segunda Liga -> Segunda División Portugal
+Premier League -> Primera División Inglaterra
+Premier League 2 -> Liga de Reservas Inglaterra Sub-21
+Primavera 1 -> Liga Juvenil Sub-19 Italia
+Primeira Liga -> Primera División Portugal
+Primera RFEF -> Tercera División España
+Qatari Stars League -> Primera División Catar
+Queensland NPL -> Liga Regional Australia (Queensland)
+Queensland Premier League -> Segunda Liga Regional Australia (Queensland)
+Regionalliga -> Cuarta División Alemania
+Romanian Liga Elitelor U17 -> Liga Juvenil Sub-17 Rumania
+Romanian Liga II -> Segunda División Rumania
+Romanian Liga Tineret U18 -> Liga Juvenil Sub-18 Rumania
+Romanian Superliga -> Primera División Rumania
+Russian First League -> Segunda División Rusia
+Russian Premier League -> Primera División Rusia
+Saudi Division 1 -> Segunda División Arabia Saudita
+Saudi Pro League -> Primera División Arabia Saudita
+Scottish Championship -> Segunda División Escocia
+Scottish League One -> Tercera División Escocia
+Scottish League Two -> Cuarta División Escocia
+Scottish Premiership -> Primera División Escocia
+Segunda RFEF -> Cuarta División España
+Serbian Prva Liga -> Segunda División Serbia
+Serbian Super Liga -> Primera División Serbia
+Serbian U17 League -> Liga Juvenil Sub-17 Serbia
+Serbian U19 League -> Liga Juvenil Sub-19 Serbia
+Serie A -> Primera División Italia
+Serie B -> Segunda División Italia
+Serie C -> Tercera División Italia
+Serie D - Girone A -> Cuarta División Italia (Grupo A)
+Serie D - Girone B -> Cuarta División Italia (Grupo B)
+Serie D - Girone C -> Cuarta División Italia (Grupo C)
+Serie D - Girone D -> Cuarta División Italia (Grupo D)
+Serie D - Girone E -> Cuarta División Italia (Grupo E)
+Serie D - Girone F -> Cuarta División Italia (Grupo F)
+Serie D - Girone G -> Cuarta División Italia (Grupo G)
+Serie D - Girone H -> Cuarta División Italia (Grupo H)
+Singapore Premier League -> Primera División Singapur
+Slovak 2. Liga -> Segunda División Eslovaquia
+Slovak Super Liga -> Primera División Eslovaquia
+Slovak U19 League -> Liga Juvenil Sub-19 Eslovaquia
+Slovenian 1. SNL -> Primera División Eslovenia
+Slovenian 2. SNL -> Segunda División Eslovenia
+South African PSL -> Primera División Sudáfrica
+South Australia NPL -> Liga Regional Australia (Australia del Sur)
+South Australia State League 1 -> Segunda Liga Regional Australia (Australia del Sur)
+Super Lig -> Primera División Turquía
+Superettan -> Segunda División Suecia
+Superliga -> Primera División (Dinamarca o Serbia según contexto)
+Swiss 1. Liga Classic -> Cuarta División Suiza
+Swiss 1. Liga Promotion -> Tercera División Suiza
+Swiss Challenge League -> Segunda División Suiza
+Swiss Super League -> Primera División Suiza
+Swiss U17 Elite -> Liga Juvenil Sub-17 Suiza
+Swiss U19 Elite -> Liga Juvenil Sub-19 Suiza
+Süper Lig -> Primera División Turquía
+Thai League 1 -> Primera División Tailandia
+Thai League 2 -> Segunda División Tailandia
+Tunisia Ligue 1 -> Primera División Túnez
+Turkish 1. Lig -> Segunda División Turquía
+Tweede Divisie -> Tercera División Países Bajos
+U17 Bundesliga -> Liga Juvenil Sub-17 Alemania
+U19 Bundesliga -> Liga Juvenil Sub-19 Alemania
+UAE Pro League -> Primera División Emiratos Árabes Unidos
+USL Championship -> Segunda División Estados Unidos
+USL League 1 -> Tercera División Estados Unidos
+Ukrainian Persha Liga -> Segunda División Ucrania
+Ukrainian Premier League -> Primera División Ucrania
+Ukrainian U19 League -> Liga Juvenil Sub-19 Ucrania
+Uruguay Primera Division -> Primera División Uruguay
+Uruguay Primera División -> Primera División Uruguay
+Uzbek Super League -> Primera División Uzbekistán
+V.League 1 -> Primera División Vietnam
+Veikkausliiga -> Primera División Finlandia
+Victoria NPL -> Liga Regional Australia (Victoria)
+Welsh Premier League -> Primera División Gales
+Western Australia NPL -> Liga Regional Australia (Australia Occidental)
+Ykkonen -> Tercera División Finlandia
+Ykkosliiga -> Segunda División Finlandia
+Ykkönen -> Tercera División Finlandia
+Ykkösliiga -> Segunda División Finlandia
