@@ -40,6 +40,8 @@ import re
 
 app = FastAPI(title="FScouting Backend", description="Motor asíncrono impulsado por DuckDB y FastAPI", version="2.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"],)
+os.makedirs("instance", exist_ok=True)
+
 SQLITE_DATABASE_URL = "sqlite:///instance/scouting_app.db"
 
 engine = create_engine(SQLITE_DATABASE_URL, connect_args={"check_same_thread": False})
@@ -54,6 +56,22 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def get_duckdb_conn():
+    """ Abre la memoria RAM y enlaza los Parquets como si fueran tablas """
+    conn = duckdb.connect(':memory:')
+    # 1. Conectamos los jugadores
+    conn.execute("""
+        CREATE VIEW dim_jugadores_stats AS 
+        SELECT * FROM 'Data_Parquet/Jugadores/*/*.parquet'
+    """)
+    
+    try:
+        conn.execute(""" CREATE VIEW dim_equipos_stats AS SELECT * FROM 'Data_Parquet/Equipos/*.parquet'""")
+    except:
+        pass
+        
+    return conn
 
 def _to_clean_float(value) -> float:
     """Limpia cualquier basura (%, comas, NaNs) y devuelve un float puro."""
@@ -189,9 +207,7 @@ def _obtener_cohorte_jugador_duckdb(nombre_jugador: str, posicion_req: Optional[
     nombre_real = nombre_jugador.split(" | ")[0].strip()
     equipo_real = nombre_jugador.split(" | ")[1].strip() if " | " in nombre_jugador else None
 
-    db_path = 'instance/scouting_analitica.duckdb'
-    if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'
-    with duckdb.connect(db_path, read_only=True) as conn:
+    with get_duckdb_conn() as conn:
         # Filtramos por nombre Y equipo (adiós homónimos)
         if equipo_real:
             df_jug = conn.execute('SELECT * FROM dim_jugadores_stats WHERE Player = ? AND Team = ? ORDER BY Season DESC, "Minutes played" DESC LIMIT 1', [nombre_real, equipo_real]).df()
@@ -279,13 +295,9 @@ def escanear_mercado_background():
     """
     Tarea en segundo plano: Detección REAL estadística de anomalías (Z-Score).
     """
-    db_path = 'instance/scouting_analitica.duckdb'
-    if not os.path.exists(db_path): return
-    
     nuevas_alertas = []
     try:
-        # 🚀 FORZAMOS EL MODO LECTURA. Si el archivo está siendo usado por ETL, saltará al except.
-        with duckdb.connect(db_path, read_only=True) as conn:
+        with get_duckdb_conn() as conn:
             df = conn.execute("SELECT * FROM dim_jugadores_stats WHERE Season IN ('25-26', '2026') AND League_Weight >= 0.9").df()
             
         if df.empty or len(df) < 10: return
@@ -356,12 +368,8 @@ _lock_alertas = threading.Lock()
 @app.get("/api/catalogo")
 @lru_cache(maxsize=1)
 def obtener_catalogo():
-    db_path = 'instance/scouting_analitica.duckdb'
-    if not os.path.exists(db_path): 
-        db_path = 'scouting_analitica.duckdb'
-    
     try:
-        with duckdb.connect(db_path, read_only=True) as conn:
+        with get_duckdb_conn() as conn:
             # Consulta SQL corregida: solo usamos 'Competition' que es la columna real de Wyscout
             query = """
                 SELECT DISTINCT 
@@ -381,12 +389,8 @@ def obtener_catalogo():
 @app.get("/api/jugadores_totales")
 async def jugs_tot(db: Session = Depends(get_db)):
     """ Extrae nombres y equipos ultrarrápido sin bloquear el servidor """
-    db_path = 'instance/scouting_analitica.duckdb'
-    if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'        
-    
     try:
-        with duckdb.connect(db_path, read_only=True) as conn:
-            # 🚀 LA MAGIA: Concatenamos los textos directamente en SQL (1000 veces más rápido que Python)
+        with get_duckdb_conn() as conn:
             query = "SELECT DISTINCT Player || ' | ' || Team AS Combo FROM dim_jugadores_stats WHERE Player IS NOT NULL"
             df = conn.execute(query).df()
             
@@ -424,12 +428,9 @@ async def api_metricas_disponibles(posicion: str):
 async def ps_add(payload: JugadorRequest, db: Session = Depends(get_db)):
     j = payload.nombre
     if not db.query(ShortlistPlayer).filter_by(user_id='default_user', player_name=j).first():
-        db_path = 'instance/scouting_analitica.duckdb'
-        if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'
-        
         equipo, edad, mins = "N/D", 0, 0
         try:
-            with duckdb.connect(db_path, read_only=True) as conn:
+            with get_duckdb_conn() as conn:
                 df_jug = conn.execute('SELECT "Team within selected timeframe", Team, Age, "Minutes played" FROM dim_jugadores_stats WHERE Player = ? LIMIT 1', [j]).df()
             if not df_jug.empty:
                 f = df_jug.iloc[0]
@@ -527,7 +528,15 @@ async def procesar_datos(payload: ProcesarRequest):
             raise HTTPException(status_code=400, detail="Falta seleccionar posición o estilo.")
 
         # 1. Extracción DuckDB
-        df_crudo = obtener_datos_sql(payload.ligas, payload.temporadas)
+        with get_duckdb_conn() as conn:
+            query = "SELECT * FROM dim_jugadores_stats WHERE 1=1"
+            if payload.ligas:
+                ligas_str = ", ".join([f"'{l.replace(chr(39), '')}'" for l in payload.ligas])
+                query += f" AND Competition IN ({ligas_str})"
+            if payload.temporadas:
+                temps_str = ", ".join([f"'{t.replace(chr(39), '')}'" for t in payload.temporadas])
+                query += f" AND Season IN ({temps_str})"
+            df_crudo = conn.execute(query).df()
         if df_crudo.empty:
             raise HTTPException(status_code=404, detail="No hay datos en las ligas seleccionadas.")
                 
@@ -694,11 +703,8 @@ async def procesar_datos(payload: ProcesarRequest):
 async def obtener_ficha(nombre_jugador: str, id: Optional[str] = None, posicion: Optional[str] = None, ligas_mercado: Optional[str] = None):
     global _CACHE_RADAR_ACTUAL
     req_pos = posicion
-    db_path = 'instance/scouting_analitica.duckdb'
-    if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'
-
     try:
-        with duckdb.connect(db_path, read_only=True) as conn:
+        with get_duckdb_conn() as conn:
             if id and id != "undefined" and id != "null" and id != "":
                 df_jugador = conn.execute(
                     """SELECT * FROM dim_jugadores_stats 
@@ -921,15 +927,12 @@ async def buscar_similares(payload: ClonadorRequest):
 @app.post("/api/comparar_radares")
 async def comp_rad(payload: CompararRadaresRequest):
     global _CACHE_RADAR_ACTUAL
-    db_path = 'instance/scouting_analitica.duckdb'
-    if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'
-    
     try:
         if not payload.jugadores:
             raise HTTPException(status_code=400, detail="No se han enviado jugadores.")
             
         jugs_str = ", ".join([f"'{j.replace(chr(39), '')}'" for j in payload.jugadores])
-        with duckdb.connect(db_path, read_only=True) as conn:
+        with get_duckdb_conn() as conn:
             df_u = conn.execute(f"SELECT * FROM dim_jugadores_stats WHERE Player IN ({jugs_str})").df()
             
         radar_activo = _CACHE_RADAR_ACTUAL if _CACHE_RADAR_ACTUAL else radar_del
@@ -971,9 +974,7 @@ async def buscar_explosiones(payload: CompararTemporadasRequest):
 @app.get("/api/evolucion/{wyscout_id}")
 async def obtener_evolucion(wyscout_id: str, posicion: str = 'Delantero'):
     try:
-        db_path = 'instance/scouting_analitica.duckdb'
-        if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'
-        with duckdb.connect(db_path, read_only=True) as conn:
+        with get_duckdb_conn() as conn:
             df_hist = conn.execute('''
                 SELECT * FROM dim_jugadores_stats 
                 WHERE CAST("Wyscout id" AS VARCHAR) = ? 
@@ -1092,10 +1093,7 @@ async def api_simular_traspaso(payload: SimularTraspasoRequest):
         nombre_real = nombre_jugador.split(" | ")[0].strip()
         equipo_real = nombre_jugador.split(" | ")[1].strip() if " | " in nombre_jugador else None
         
-        db_path = 'instance/scouting_analitica.duckdb'
-        if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'
-        
-        with duckdb.connect(db_path, read_only=True) as conn:
+        with get_duckdb_conn() as conn:
             if equipo_real:
                 df_jug = conn.execute('SELECT * FROM dim_jugadores_stats WHERE Player = ? AND Team = ? ORDER BY Season DESC, "Minutes played" DESC LIMIT 1', [nombre_real, equipo_real]).df()
             else:
@@ -1126,20 +1124,16 @@ async def api_simular_traspaso(payload: SimularTraspasoRequest):
 # ==========================================
 
 def obtener_datos_equipos_tacticos_duckdb():
-    db_path = 'instance/scouting_analitica.duckdb'
-    if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'
     try:
-        with duckdb.connect(db_path, read_only=True) as conn:
+        with get_duckdb_conn() as conn:
             return conn.execute("SELECT * FROM dim_equipos_stats").df()
     except Exception:
         return pd.DataFrame()
 
 @app.get("/api/equipos_tacticos")
 async def api_equipos_tacticos():
-    db_path = 'instance/scouting_analitica.duckdb'
-    if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'
     try:
-        with duckdb.connect(db_path, read_only=True) as conn:
+        with get_duckdb_conn() as conn:
             # 🚀 IA: Leemos la liga y país nativos de la tabla de equipos. Cero contaminación.
             query = """
                 SELECT 
@@ -1180,14 +1174,13 @@ async def set_equipo(payload: SetEquipoRequest, db: Session = Depends(get_db)):
     db.query(SquadPlannerPlayer).filter_by(user_id='default_user').delete()
     db.commit()
 
-    if equipo != "Freelance" and payload.pais and payload.liga and payload.temporada:
-        from backend.core.pandas import obtener_catalogo_datos, preparar_dataframe
-        catalogo = obtener_catalogo_datos()
-        entrada = next((c for c in catalogo if c['pais'] == payload.pais and c['liga'] == payload.liga and c['temporada'] == payload.temporada), None)
-        
-        if not entrada: raise HTTPException(status_code=400, detail="Combinación no reconocida.")
+    if equipo != "Freelance" and payload.liga and payload.temporada:
+        from backend.core.pandas import preparar_dataframe
         try:
-            df = pd.read_parquet(entrada['ruta'])
+            with get_duckdb_conn() as conn:
+                df = conn.execute("SELECT * FROM dim_jugadores_stats WHERE Competition = ? AND Season = ?", [payload.liga, payload.temporada]).df()
+                
+            if df.empty: raise HTTPException(status_code=400, detail="No se encontraron datos para ese equipo y temporada.")
             col_t = 'Team within selected timeframe' if 'Team within selected timeframe' in df.columns else 'Team'
             _CACHE_PLANTILLA = preparar_dataframe(df[df[col_t] == equipo].copy()).copy()            
             for _, row in _CACHE_PLANTILLA.iterrows():
@@ -1296,9 +1289,6 @@ async def radar_equipos(payload: RadarEquiposRequest):
 async def calcular_team_fit(payload: TeamFitRequest):
     global _CACHE_TEAM_FIT_PESOS
     try:
-        db_path = 'instance/scouting_analitica.duckdb'
-        if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'
-
         df_tactico = obtener_datos_equipos_tacticos_duckdb()
         if df_tactico.empty or payload.equipo_tactico not in df_tactico['Team'].values: 
             raise HTTPException(status_code=404, detail="No hay datos tácticos para este equipo.")
@@ -1306,7 +1296,7 @@ async def calcular_team_fit(payload: TeamFitRequest):
         # =========================================================
         # 🚀 FIX SUPREMO: EL CERROJO SQL DE DUCKDB
         # =========================================================
-        with duckdb.connect(db_path, read_only=True) as conn:
+        with get_duckdb_conn() as conn:
             query = "SELECT * FROM dim_jugadores_stats WHERE 1=1"
             
             # 🚀 ALERTA DE SEGURIDAD: Si no hay ligas, bloqueamos la búsqueda
@@ -1419,12 +1409,8 @@ async def calcular_team_fit(payload: TeamFitRequest):
 async def team_fit_radar(payload: TeamFitRadarRequest):
     pesos = payload.pesos # 🚀 AHORA ESTOS SON LOS TARGET PERCENTILES (0-100)
     if not pesos: raise HTTPException(status_code=400, detail="Sin pesos tácticos configurados.")
-    
-    db_path = 'instance/scouting_analitica.duckdb'
-    if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'
-    
     try:
-        with duckdb.connect(db_path, read_only=True) as conn:
+        with get_duckdb_conn() as conn:
             if payload.wyscout_id and payload.wyscout_id not in ["undefined", "", "null"]:
                 df = conn.execute(
                     """SELECT * FROM dim_jugadores_stats 
@@ -1575,10 +1561,8 @@ async def sync_data():
 @app.get("/api/jugadores")
 @lru_cache(maxsize=1)
 def obtener_nombres_jugadores():
-    db_path = 'instance/scouting_analitica.duckdb'
-    if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'
     try:
-        with duckdb.connect(db_path, read_only=True) as conn:
+        with get_duckdb_conn() as conn:
             # Saca todos los nombres únicos ordenados alfabéticamente
             df = conn.execute("SELECT DISTINCT Player FROM dim_jugadores_stats WHERE Player IS NOT NULL ORDER BY Player").df()
             return df['Player'].tolist()
@@ -1997,7 +1981,6 @@ async def ejecutar_etl_completo():
             try: os.remove(db_temp)
             except: pass
             
-        import duckdb
         conn_write = duckdb.connect(db_temp)    
         conn_write.execute("CREATE OR REPLACE TABLE dim_jugadores_stats AS SELECT * FROM df_limpio")
         if not df_equipos.empty:
@@ -2033,7 +2016,6 @@ async def curar_base_de_datos():
     import time
     import gc
     import os
-    import duckdb
     t0 = time.time()
     
     db_path = 'instance/scouting_analitica.duckdb'
@@ -2153,11 +2135,8 @@ async def curar_base_de_datos():
 @app.get("/api/equipos")
 def obtener_lista_equipos():
     """Devuelve la lista de todos los equipos únicos para el autocompletado del buscador"""
-    db_path = 'instance/scouting_analitica.duckdb'
-    if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'
-    
     try:
-        with duckdb.connect(db_path, read_only=True) as conn:
+        with get_duckdb_conn() as conn:
             # Saca todos los nombres únicos de equipos ordenados alfabéticamente
             df = conn.execute("SELECT DISTINCT Team FROM dim_jugadores_stats WHERE Team IS NOT NULL ORDER BY Team").df()
             return df['Team'].tolist()
@@ -2167,11 +2146,8 @@ def obtener_lista_equipos():
 
 @app.post("/api/comparar_h2h")
 async def comparar_h2h(payload: H2HRequest):
-    db_path = 'instance/scouting_analitica.duckdb'
-    if not os.path.exists(db_path): db_path = 'scouting_analitica.duckdb'
-    
     try:
-        with duckdb.connect(db_path, read_only=True) as conn:
+        with get_duckdb_conn() as conn:
             df_1 = conn.execute("SELECT * FROM dim_jugadores_stats WHERE Player ILIKE ? ORDER BY Season DESC, \"Minutes played\" DESC LIMIT 1", [f"%{payload.jugador1}%"]).df()
             df_2 = conn.execute("SELECT * FROM dim_jugadores_stats WHERE Player ILIKE ? ORDER BY Season DESC, \"Minutes played\" DESC LIMIT 1", [f"%{payload.jugador2}%"]).df()
             
