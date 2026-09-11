@@ -426,7 +426,7 @@ def predecir_potencial_jugador(df, nombre_jugador, d_estilos):
     
     return {"probabilidad": round(prob_final * 100, 1), "factores": explicacion}
 
-from backend.config.diccionarios import PESOS_LIGAS
+from config.diccionarios import PESOS_LIGAS
 METRICAS_FISICAS = {'Duels', 'Accelerations', 'runs'}
 METRICAS_TECNICAS = {'Passes', 'Smart', 'Crosses'}
 

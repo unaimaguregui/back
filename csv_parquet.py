@@ -6,8 +6,8 @@ from pathlib import Path
 # ==========================================
 # 1. IMPORTAMOS TUS MATEMÁTICAS (Desde tu Backend)
 # ==========================================
-from backend.core.pandas import _cols_nuevas_metricas, motor_escalado_unico, motor_calculo_ratings
-from backend.config.diccionarios import (
+from core.pandas import _cols_nuevas_metricas, motor_escalado_unico, motor_calculo_ratings
+from config.diccionarios import (
     estilos_gk, estilos_cb, estilos_lt, estilos_mcd, 
     estilos_int, estilos_mp, estilos_ext, estilos_del, estilos_med, PESOS_LIGAS
 )

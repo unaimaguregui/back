@@ -2,7 +2,7 @@ import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import plotly.io as pio
-from backend.config.diccionarios import scatter_configs_multi
+from config.diccionarios import scatter_configs_multi
 
 def dibujar_radares(df, jugadores_lista, dict_radar):
     colores_linea = ['rgba(14, 165, 233, 1)', 'rgba(244, 63, 94, 1)', 'rgba(16, 185, 129, 1)']

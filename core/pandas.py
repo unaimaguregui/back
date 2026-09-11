@@ -4,7 +4,7 @@ import os
 import duckdb
 from sklearn.preprocessing import StandardScaler
 from sqlalchemy import create_engine, text
-from backend.config.diccionarios import PESOS_LIGAS
+from config.diccionarios import PESOS_LIGAS
 
 # ============================================================
 # CATÁLOGO
@@ -363,7 +363,7 @@ def calcular_etiqueta_pro(datos, arg2=25, arg3='N/D', matriz_ort=None, cohort_st
         return "Perfil de Rotación"
     return "Rendimiento Insuficiente"
 
-from backend.config.diccionarios import estilos_gk, estilos_cb, estilos_lt, estilos_mcd, estilos_int, estilos_mp, estilos_ext, estilos_del
+from config.diccionarios import estilos_gk, estilos_cb, estilos_lt, estilos_mcd, estilos_int, estilos_mp, estilos_ext, estilos_del
 import pandas as pd
 
 def calcular_mejor_rol_vectorizado(row, posicion):

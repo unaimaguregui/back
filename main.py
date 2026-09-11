@@ -8,8 +8,8 @@ import os
 from functools import lru_cache
 import pandas as pd
 import duckdb
-from backend.core.pandas import motor_escalado_unico, motor_calculo_ratings
-from backend.core.pandas import obtener_catalogo_datos
+from core.pandas import motor_escalado_unico, motor_calculo_ratings
+from core.pandas import obtener_catalogo_datos
 from pydantic import BaseModel
 from typing import List, Optional
 from fastapi import Depends, HTTPException
@@ -23,18 +23,18 @@ import io
 import json
 import glob
 from datetime import datetime
-from backend.config.diccionarios import fases_juego
-from backend.core.models import UserSettings
+from config.diccionarios import fases_juego
+from core.models import UserSettings
 import pandas as pd
-from backend.core.pandas import obtener_datos_sql
-from backend.config.diccionarios import (
+from core.pandas import obtener_datos_sql
+from config.diccionarios import (
     mapa_posiciones, estilos_gk, estilos_cb, estilos_lt, estilos_mcd, 
     estilos_int, estilos_mp, estilos_ext, estilos_del, estilos_med,
     radar_gk, radar_cb, radar_lt, radar_mcd, radar_int, radar_mp, radar_ext, radar_del, PESOS_LIGAS
 )
 
-from backend.core.models import SquadPlannerPlayer, ShortlistPlayer
-from backend.core.graficos import dibujar_posiciones, dibujar_radares, dibujar_scatter_multi
+from core.models import SquadPlannerPlayer, ShortlistPlayer
+from core.graficos import dibujar_posiciones, dibujar_radares, dibujar_scatter_multi
 from sklearn.metrics.pairwise import euclidean_distances, cosine_similarity
 import re
 
@@ -235,7 +235,7 @@ def _obtener_cohorte_jugador_duckdb(nombre_jugador: str, posicion_req: Optional[
         ]
 
     pos_final = posicion_req if posicion_req else gen_pos
-    from backend.core.pandas import filtrar_por_posicion_real, preparar_dataframe
+    from core.pandas import filtrar_por_posicion_real, preparar_dataframe
     df_filtrado = filtrar_por_posicion_real(df_cohorte, mapa_posiciones.get(pos_final, ''))
     
     if nombre_real not in df_filtrado['Player'].values:
@@ -251,7 +251,7 @@ def cargar_pool_temporada_duckdb(ligas, temporadas, posicion, estilo):
     df = obtener_datos_sql(ligas, temporadas)
     if df.empty: return pd.DataFrame()
     
-    from backend.core.pandas import filtrar_por_posicion_real
+    from core.pandas import filtrar_por_posicion_real
     df_filtrado = filtrar_por_posicion_real(df, mapa_posiciones.get(posicion, ''))
     if df_filtrado.empty: return pd.DataFrame()
     
@@ -547,7 +547,7 @@ async def procesar_datos(payload: ProcesarRequest):
         
         # 2. Filtro Posicional
         regex_pos = mapa_posiciones.get(payload.posicion, '')
-        from backend.core.pandas import filtrar_por_posicion_real, preparar_dataframe
+        from core.pandas import filtrar_por_posicion_real, preparar_dataframe
         
         df_filtrado = filtrar_por_posicion_real(df_crudo, regex_pos)
         df_filtrado = df_filtrado[~df_filtrado['Player'].str.contains(r'\[REF\]', na=False)].copy()
@@ -584,7 +584,7 @@ async def procesar_datos(payload: ProcesarRequest):
         col_num = [c for c in df_base.select_dtypes(include=[np.number]).columns if c not in COLS_META and not c.startswith('Rating_')]
         METRICAS_INVERSAS = ['conceded', 'against', 'losses', 'turnovers', 'fouls', 'yellow', 'red', 'pérdidas', 'faltas', 'encajados']
         
-        from backend.core.pandas import motor_escalado_unico, motor_calculo_ratings
+        from core.pandas import motor_escalado_unico, motor_calculo_ratings
         
         df_base = motor_escalado_unico(
             df=df_base, col_num=col_num, metricas_inversas=METRICAS_INVERSAS,
@@ -645,7 +645,7 @@ async def procesar_datos(payload: ProcesarRequest):
 
         # 6. Etiquetado Scouting Pro
         try:
-            from backend.core.pandas import generar_matriz_ortogonalidad
+            from core.pandas import generar_matriz_ortogonalidad
             matriz_ort = generar_matriz_ortogonalidad(d_pos)
         except Exception:
             matriz_ort = None
@@ -655,7 +655,7 @@ async def procesar_datos(payload: ProcesarRequest):
         else:
             cohort_stats = {'valido': False}
 
-        from backend.core.pandas import calcular_etiqueta_pro
+        from core.pandas import calcular_etiqueta_pro
 
         def aplicar_etiqueta_real(row):
             rat_est = {est: int(row.get(f'Rating_{est}', 50)) for est in d_pos.keys() if est != 'Personalizado'}
@@ -781,7 +781,7 @@ async def obtener_ficha(nombre_jugador: str, id: Optional[str] = None, posicion:
             
     if req_pos not in posiciones_validas: posiciones_validas.append(req_pos)
     
-    from backend.core.pandas import filtrar_por_posicion_real, preparar_dataframe
+    from core.pandas import filtrar_por_posicion_real, preparar_dataframe
     regex_pos = mapa_posiciones.get(req_pos, '')
     df_peers = preparar_dataframe(filtrar_por_posicion_real(df_peers, regex_pos))
 
@@ -844,11 +844,11 @@ async def obtener_ficha(nombre_jugador: str, id: Optional[str] = None, posicion:
         cohort_stats = {'valido': False}
 
     try:
-        from backend.core.pandas import calcular_etiqueta_pro, generar_matriz_ortogonalidad
+        from core.pandas import calcular_etiqueta_pro, generar_matriz_ortogonalidad
         matriz_ort = generar_matriz_ortogonalidad(d_estilos)
         perfil_scouting = calcular_etiqueta_pro(ratings_dict, arg2=info['edad'], arg3=c_jug, matriz_ort=matriz_ort, cohort_stats=cohort_stats)
     except Exception:
-        from backend.core.pandas import calcular_etiqueta_pro
+        from core.pandas import calcular_etiqueta_pro
         perfil_scouting = calcular_etiqueta_pro(ratings_dict, arg2=info['edad'], arg3=c_jug, cohort_stats=cohort_stats)
         
     info['perfil_scouting'] = f"{perfil_scouting} (en {c_jug})"
@@ -863,7 +863,7 @@ async def obtener_ficha(nombre_jugador: str, id: Optional[str] = None, posicion:
     # =========================================================
     clones = []
     try:
-        from backend.core.ml import generar_modelo_similitud
+        from core.ml import generar_modelo_similitud
         
         # Invocamos al motor PCA de manera "invisible"
         fig_json, pca_clones = generar_modelo_similitud(df_peers, nombre_real_jugador, d_estilos)
@@ -907,7 +907,7 @@ async def buscar_similares(payload: ClonadorRequest):
             'Extremo': estilos_ext, 'Medio': estilos_med
         }.get(gen_pos.split(' ')[0], estilos_del)
         
-        from backend.core.ml import generar_modelo_similitud
+        from core.ml import generar_modelo_similitud
         # Usamos nombre_real aquí
         fig_json, clones_dict = generar_modelo_similitud(df_filtrado, nombre_real, d_estilos)
         
@@ -1002,10 +1002,10 @@ async def obtener_evolucion(wyscout_id: str, posicion: str = 'Delantero'):
         }.get(posicion.split(' ')[0], radar_del)
 
         try:
-            from backend.core.pandas import generar_matriz_ortogonalidad
+            from core.pandas import generar_matriz_ortogonalidad
             matriz_ort = generar_matriz_ortogonalidad(d_estilos)
         except Exception: matriz_ort = None
-        from backend.core.pandas import calcular_etiqueta_pro
+        from core.pandas import calcular_etiqueta_pro
 
         for _, row in df_hist.iterrows():
             minutos_jugados = int(row.get('Minutes played', 0)) if pd.notna(row.get('Minutes played')) else 0
@@ -1076,7 +1076,7 @@ async def predecir_potencial(nombre_jugador: str, posicion: str = 'Delantero'):
             'Extremo': estilos_ext, 'Medio': estilos_med
         }.get(posicion.split(' ')[0], estilos_del)
         
-        from backend.core.ml import predecir_potencial_jugador
+        from core.ml import predecir_potencial_jugador
         resultado = predecir_potencial_jugador(df_filtrado, nombre_real, d_estilos)
         if not resultado: raise HTTPException(status_code=400, detail="No se pudo generar el modelo.")
         return resultado
@@ -1112,7 +1112,7 @@ async def api_simular_traspaso(payload: SimularTraspasoRequest):
             'Extremo': estilos_ext, 'Medio': estilos_med
         }.get(posicion.split(' ')[0], estilos_del)
         
-        from backend.core.ml import simular_traspaso
+        from core.ml import simular_traspaso
         resultado = simular_traspaso(jugador_row, df_base, d_estilos, liga_destino)
         return resultado
     except HTTPException: raise
@@ -1175,7 +1175,7 @@ async def set_equipo(payload: SetEquipoRequest, db: Session = Depends(get_db)):
     db.commit()
 
     if equipo != "Freelance" and payload.liga and payload.temporada:
-        from backend.core.pandas import preparar_dataframe
+        from core.pandas import preparar_dataframe
         try:
             with get_duckdb_conn() as conn:
                 df = conn.execute("SELECT * FROM dim_jugadores_stats WHERE Competition = ? AND Season = ?", [payload.liga, payload.temporada]).df()
@@ -1333,7 +1333,7 @@ async def calcular_team_fit(payload: TeamFitRequest):
             raise HTTPException(status_code=404, detail="No hay jugadores en las ligas seleccionadas.")
         # =========================================================
         
-        from backend.core.pandas import filtrar_por_posicion_real, preparar_dataframe
+        from core.pandas import filtrar_por_posicion_real, preparar_dataframe
         df_filtrado = filtrar_por_posicion_real(df_crudo, mapa_posiciones.get(payload.posicion))
         df_filtrado = df_filtrado[~df_filtrado['Player'].str.contains(r'\[REF\]', na=False)].copy()
         
@@ -1341,7 +1341,7 @@ async def calcular_team_fit(payload: TeamFitRequest):
         
         df_filtrado = preparar_dataframe(df_filtrado)
 
-        from backend.core.ml import generar_target_estilo_equipo, calcular_style_fit, calcular_quality_score
+        from core.ml import generar_target_estilo_equipo, calcular_style_fit, calcular_quality_score
         
         # 2. GENERAMOS EL TARGET HÍBRIDO TÁCTICO
         target_z, saliencia, perfil_texto = generar_target_estilo_equipo(
@@ -1522,8 +1522,8 @@ async def sync_data():
     async def generate():
         import re
         import os
-        from backend.core.pandas import obtener_catalogo_datos
-        from backend.config.diccionarios import MAPEO_LIGAS_PAISES
+        from core.pandas import obtener_catalogo_datos
+        from config.diccionarios import MAPEO_LIGAS_PAISES
         try:
             yield f"data: {json.dumps({'progress': 5, 'msg': 'Iniciando escaneo...'})}\n\n"
             ruta_origen = "Data"
@@ -1951,7 +1951,7 @@ async def ejecutar_etl_completo():
         df_crudo = df_crudo.fillna(0)
 
         # 4. Matemáticas (Acciones exitosas)
-        from backend.core.pandas import _cols_nuevas_metricas
+        from core.pandas import _cols_nuevas_metricas
         extra_masters = _cols_nuevas_metricas(df_crudo)
         if extra_masters:
             df_crudo = pd.concat([df_crudo, pd.DataFrame(extra_masters, index=df_crudo.index).fillna(0)], axis=1)
@@ -1965,7 +1965,7 @@ async def ejecutar_etl_completo():
         col_num = [c for c in df_crudo.select_dtypes(include=[np.number]).columns if c not in COLS_META]
         METRICAS_INVERSAS = ['conceded', 'against', 'losses', 'turnovers', 'fouls', 'yellow', 'red', 'pérdidas', 'faltas', 'encajados']
         
-        from backend.core.pandas import motor_escalado_unico, motor_calculo_ratings
+        from core.pandas import motor_escalado_unico, motor_calculo_ratings
         df_limpio = motor_escalado_unico(df_crudo, col_num, METRICAS_INVERSAS, None, True, 0)
 
         # 6. Ratings
@@ -2076,7 +2076,7 @@ async def curar_base_de_datos():
         METRICAS_INVERSAS = ['conceded', 'against', 'losses', 'turnovers', 'fouls', 'yellow', 'red', 'pérdidas', 'faltas', 'encajados']
         col_comp = 'Competition' if 'Competition' in df.columns else 'League'
 
-        from backend.core.pandas import motor_escalado_unico, motor_calculo_ratings
+        from core.pandas import motor_escalado_unico, motor_calculo_ratings
         df = motor_escalado_unico(df, col_num, METRICAS_INVERSAS, ['Season', col_comp, 'Pos_Estricta'], False, 300)
 
         gc.collect()
