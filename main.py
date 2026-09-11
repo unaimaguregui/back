@@ -58,14 +58,23 @@ def get_db():
         db.close()
 
 def get_duckdb_conn():
-    """ Abre la memoria RAM y enlaza los Parquets como si fueran tablas """
+    """ Abre la memoria RAM y enlaza los Parquets de forma protegida """
     conn = duckdb.connect(':memory:')
-    # 1. Conectamos los jugadores
-    conn.execute("""
-        CREATE VIEW dim_jugadores_stats AS 
-        SELECT * FROM 'Data_Parquet/Jugadores/*/*.parquet'
-    """)
     
+    # 🛡️ ESCUDO ANTI-CRASHEOS PARA RENDER (Límites de RAM y CPU)
+    conn.execute("PRAGMA memory_limit='150MB'")
+    conn.execute("PRAGMA threads=1")
+    
+    # 1. Conectamos los jugadores de forma segura
+    try:
+        conn.execute("""
+            CREATE VIEW dim_jugadores_stats AS 
+            SELECT * FROM 'Data_Parquet/Jugadores/*/*.parquet'
+        """)
+    except:
+        pass
+        
+    # 2. Conectamos los equipos
     try:
         conn.execute(""" CREATE VIEW dim_equipos_stats AS SELECT * FROM 'Data_Parquet/Equipos/*.parquet'""")
     except:
