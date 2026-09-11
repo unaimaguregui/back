@@ -1,357 +1,191 @@
 import os
-import duckdb
+import pandas as pd
+import numpy as np
 from pathlib import Path
 
-TEMPORADAS_ACTIVAS = ["2026", "26-27"] 
+# ==========================================
+# 1. IMPORTAMOS TUS MATEMÁTICAS (Desde tu Backend)
+# ==========================================
+from backend.core.pandas import _cols_nuevas_metricas, motor_escalado_unico, motor_calculo_ratings
+from backend.config.diccionarios import (
+    estilos_gk, estilos_cb, estilos_lt, estilos_mcd, 
+    estilos_int, estilos_mp, estilos_ext, estilos_del, estilos_med, PESOS_LIGAS
+)
+
+# ==========================================
+# 2. CONFIGURACIÓN DE CARPETAS Y DICCIONARIO
+# ==========================================
+TEMPORADAS_ACTIVAS = ["26-27", "2026"] 
 
 DIR_JUGADORES_CSV = Path("Data")
 DIR_EQUIPOS_CSV = Path("Data_Teams")
+
 DIR_JUGADORES_PARQUET = Path("Data_Parquet/Jugadores")
 DIR_EQUIPOS_PARQUET = Path("Data_Parquet/Equipos")
 
-# ==========================================
-# 🌍 EL GRAN DICCIONARIO MUNDIAL DE LIGAS (ACTUALIZADO)
-# ==========================================
-MAPEO_PAISES = {
-    # --- NUEVAS LIGAS AÑADIDAS ---
-    "2. Bundesliga": "Alemania",
-    "Besta-Deild Karla": "Islandia",
-    "Besta-deild karla": "Islandia",
-    "Bolivian Primera Division": "Bolivia",
-    "Bolivian LFPB": "Bolivia",
-    "Brasileirao": "Brasil",
-    "Brasileirão": "Brasil",
-    "Challenger Pro League": "Bélgica",
-    "Czech First League": "República Checa",
-    "Frauen-Bundesliga": "Alemania",
-    "Liga F": "España",
-    "Liga Profesional Argentina": "Argentina",
-    "Ligue 3": "Francia",
-    "Mexican U21 League": "México",
-    "Northern Super League": "Canadá",
-    "NWSL": "Estados Unidos",
-    "Paraguayan Division Profesional": "Paraguay",
-    "Premiere Ligue": "Francia",
-    "Qatari Second Division": "Catar",
-    "Romanian Liga 1": "Rumania",
-    "Segunda Division": "España",
-    "Slovak 1. Liga": "Eslovaquia",
-    "South Africa PSL": "Sudáfrica",
-    "Super League Greece": "Grecia",
-    "USL League One": "Estados Unidos",
-    "USL Super League": "Estados Unidos",
-    "Venezuelan Primera Division": "Venezuela",
-    "Virsliga": "Letonia",
-    "Vrouwen Eredivisie": "Países Bajos",
-    "World Cup": "Internacional", # Lo mandamos a Internacional a propósito
-
-    # --- LIGAS ANTERIORES ---
-    "1. HNL": "Croacia",
-    "Bundesliga": "Alemania", 
-    "2. HNL": "Croacia",
-    "3. Liga": "Alemania",
-    "A-League Men": "Australia",
-    "Albanian Kategoria Superiore": "Albania",
-    "Allsvenskan": "Suecia",
-    "Andorra Primera Divisió": "Andorra",
-    "Argentina Copa de la Liga": "Argentina",
-    "Argentina LPF": "Argentina",
-    "Argentina Primera Nacional": "Argentina",
-    "Argentina Reserve League": "Argentina",
-    "Armenian Premier League": "Armenia",
-    "Australian NPLs": "Australia",
-    "Austrian 2. Liga": "Austria",
-    "Austrian Bundesliga": "Austria",
-    "Azeri Birinci Dasta": "Azerbaiyán",
-    "Azeri Premyer Liqa": "Azerbaiyán",
-    "BRI Liga 1": "Indonesia",
-    "Bahrain Premier League": "Baréin",
-    "Belarusian 1. Division": "Bielorrusia",
-    "Belarusian Premier League": "Bielorrusia",
-    "Belarusian Reserve League": "Bielorrusia",
-    "Belgian First Division B": "Bélgica",
-    "Belgian Pro League": "Bélgica",
-    "Bosnian Premier League": "Bosnia y Herzegovina",
-    "Botola Pro": "Marruecos",
-    "Brazil Serie B": "Brasil",
-    "Brazil Serie C": "Brasil",
-    "Bulgarian First League": "Bulgaria",
-    "Cambodian Premier League": "Camboya",
-    "Campeonato de Portugal": "Portugal",
-    "Canadian Premier League": "Canadá",
-    "Capital Territory NPL": "Australia",
-    "Championship": "Inglaterra",
-    "Chilean Primera B": "Chile",
-    "Chilean Primera Division": "Chile",
-    "Chilean Primera División": "Chile",
-    "China League One": "China",
-    "China League Two": "China",
-    "Chinese Super League": "China",
-    "Colombian Primera A": "Colombia",
-    "Colombian Torneo BetPlay": "Colombia",
-    "Costa Rican Primera Division": "Costa Rica",
-    "Costa Rican Primera División": "Costa Rica",
-    "Cyprus 1. Division": "Chipre",
-    "Cyprus 2. Division": "Chipre",
-    "Czech 1. Liga U19": "República Checa",
-    "Czech FNL": "República Checa",
-    "Czech Fortuna Liga": "República Checa",
-    "Czech U17 League": "República Checa",
-    "Danish 1. Division": "Dinamarca",
-    "Danish 2. Division": "Dinamarca",
-    "Danish 3. Division": "Dinamarca",
-    "Danish U17 Division": "Dinamarca",
-    "Danish U17 Ligaen": "Dinamarca",
-    "Danish U19 Division": "Dinamarca",
-    "Danish U19 Ligaen": "Dinamarca",
-    "Ecuador Liga Pro": "Ecuador",
-    "Eerste Divisie": "Países Bajos",
-    "Egyptian Premier League": "Egipto",
-    "Ekstraklasa": "Polonia",
-    "El Salvador Primera Division": "El Salvador",
-    "El Salvador Primera División": "El Salvador",
-    "Eliteserien": "Noruega",
-    "English National League North South": "Inglaterra", 
-    "English National League": "Inglaterra",
-    "English Non-League Premier Division - Step 7": "Inglaterra",
-    "Eredivisie": "Países Bajos",
-    "Erovnuli Liga 2": "Georgia",
-    "Erovnuli Liga": "Georgia",
-    "Estonia Meistriliiga": "Estonia",
-    "Estonian Esiliiga A": "Estonia",
-    "Ettan": "Suecia",
-    "Faroe Islands Meistaradeildin": "Islas Feroe",
-    "French National 1": "Francia",
-    "Greek Super League 2": "Grecia",
-    "Greek Super League": "Grecia",
-    "Greek U19 Super League": "Grecia",
-    "Guatemalan Liga Nacional": "Guatemala",
-    "Honduran Liga Nacional": "Honduras",
-    "Hong Kong Premier League": "Hong Kong",
-    "Iceland 1. Deild": "Islandia",
-    "Indian Super League": "India",
-    "Irish First Division": "Irlanda",
-    "Irish Premier Division": "Irlanda",
-    "J1": "Japón",
-    "J2": "Japón",
-    "J3": "Japón",
-    "Jordan Pro League": "Jordania",
-    "K League 1": "Corea del Sur",
-    "K League 2": "Corea del Sur",
-    "K3 League": "Corea del Sur",
-    "K4 League": "Corea del Sur",
-    "Kazakh 1. Division": "Kazajistán",
-    "Kazakh 2. Division": "Kazajistán",
-    "Kazakh Premier League": "Kazajistán",
-    "Kazakh U16 League": "Kazajistán",
-    "Kazakh U17 League": "Kazajistán",
-    "Kazakh U18 League": "Kazajistán",
-    "Kosovo Superliga": "Kosovo",
-    "Kyrgyz Premier League": "Kirguistán",
-    "La Liga 2": "España",
-    "La Liga": "España",
-    "Latvian 1. Liga": "Letonia",
-    "Latvian Virsliga": "Letonia",
-    "League One": "Inglaterra",
-    "League Two": "Inglaterra",
-    "Liga Leumit": "Israel",
-    "Liga MX": "México",
-    "Liga de Expansion MX": "México",
-    "Liga de Expansión MX": "México",
-    "Ligat ha'Al": "Israel",
-    "Ligue 1": "Francia",
-    "Ligue 2": "Francia",
-    "Lithuanian 1 Lyga": "Lituania",
-    "Lithuanian A Lyga": "Lituania",
-    "Luxembourg National Division": "Luxemburgo",
-    "MLS Next Pro": "Estados Unidos",
-    "MLS": "Estados Unidos",
-    "Malaysian Super League": "Malasia",
-    "Malta Challenge League": "Malta",
-    "Malta Premier League": "Malta",
-    "Mexican U17 League": "México",
-    "Mexican U18 League": "México",
-    "Mexican U19 League": "México",
-    "Mexican U23 League": "México",
-    "Moldovan Super Liga": "Moldavia",
-    "Montenegro First League": "Montenegro",
-    "Montenegro Second League": "Montenegro",
-    "NB I": "Hungría",
-    "NB II": "Hungría",
-    "NCAA D2": "Estados Unidos",
-    "NCAA D3": "Estados Unidos",
-    "New South Wales NPL": "Australia",
-    "New Zealand National League": "Nueva Zelanda",
-    "Nicaragua Primera Division": "Nicaragua",
-    "Nigerian Creative Championship": "Nigeria",
-    "North Macedonia First League": "Macedonia del Norte",
-    "Northern Irish Premiership": "Irlanda del Norte",
-    "Norwegian 2. Division": "Noruega",
-    "OBOS Ligaen": "Noruega",
-    "Panama LPF": "Panamá",
-    "Paraguay Division Profesional": "Paraguay",
-    "Peruvian Liga 1": "Perú",
-    "Polish I Liga": "Polonia",
-    "Polish II Liga": "Polonia",
-    "Portuguese Juniores U17": "Portugal",
-    "Portuguese Juniores U19": "Portugal",
-    "Portuguese Júniores U17": "Portugal",
-    "Portuguese Júniores U19": "Portugal",
-    "Portuguese Liga 3": "Portugal",
-    "Portuguese Liga Revelacao Sub 23": "Portugal",
-    "Portuguese Liga Revelação Sub 23": "Portugal",
-    "Portuguese Segunda Liga": "Portugal",
-    "Premier League 2": "Inglaterra",
-    "Premier League": "Inglaterra",
-    "Primavera 1": "Italia",
-    "Primeira Liga": "Portugal",
-    "Primera RFEF": "España",
-    "Qatari Stars League": "Catar",
-    "Queensland NPL": "Australia",
-    "Queensland Premier League": "Australia",
-    "Regionalliga": "Alemania",
-    "Romanian Liga Elitelor U17": "Rumania",
-    "Romanian Liga II": "Rumania",
-    "Romanian Liga Tineret U18": "Rumania",
-    "Romanian Superliga": "Rumania",
-    "Russian First League": "Rusia",
-    "Russian Premier League": "Rusia",
-    "Saudi Division 1": "Arabia Saudita",
-    "Saudi Pro League": "Arabia Saudita",
-    "Scottish Championship": "Escocia",
-    "Scottish League One": "Escocia",
-    "Scottish League Two": "Escocia",
-    "Scottish Premiership": "Escocia",
-    "Segunda RFEF": "España",
-    "Serbian Prva Liga": "Serbia",
-    "Serbian Super Liga": "Serbia",
-    "Serbian U17 League": "Serbia",
-    "Serbian U19 League": "Serbia",
-    "Serie A": "Italia",
-    "Serie B": "Italia",
-    "Serie C": "Italia",
-    "Serie D - Girone A": "Italia",
-    "Serie D - Girone B": "Italia",
-    "Serie D - Girone C": "Italia",
-    "Serie D - Girone D": "Italia",
-    "Serie D - Girone E": "Italia",
-    "Serie D - Girone F": "Italia",
-    "Serie D - Girone G": "Italia",
-    "Serie D - Girone H": "Italia",
-    "Singapore Premier League": "Singapur",
-    "Slovak 2. Liga": "Eslovaquia",
-    "Slovak Super Liga": "Eslovaquia",
-    "Slovak U19 League": "Eslovaquia",
-    "Slovenian 1. SNL": "Eslovenia",
-    "Slovenian 2. SNL": "Eslovenia",
-    "South African PSL": "Sudáfrica",
-    "South Australia NPL": "Australia",
-    "South Australia State League 1": "Australia",
-    "Super Lig": "Turquía",
-    "Süper Lig": "Turquía",
-    "Superettan": "Suecia",
-    "Superliga": "Europa", 
-    "Swiss 1. Liga Classic": "Suiza",
-    "Swiss 1. Liga Promotion": "Suiza",
-    "Swiss Challenge League": "Suiza",
-    "Swiss Super League": "Suiza",
-    "Swiss U17 Elite": "Suiza",
-    "Swiss U19 Elite": "Suiza",
-    "Thai League 1": "Tailandia",
-    "Thai League 2": "Tailandia",
-    "Tunisia Ligue 1": "Túnez",
-    "Turkish 1. Lig": "Turquía",
-    "Tweede Divisie": "Países Bajos",
-    "U17 Bundesliga": "Alemania",
-    "U19 Bundesliga": "Alemania",
-    "UAE Pro League": "Emiratos Árabes Unidos",
-    "USL Championship": "Estados Unidos",
-    "Ukrainian Persha Liga": "Ucrania",
-    "Ukrainian Premier League": "Ucrania",
-    "Ukrainian U19 League": "Ucrania",
-    "Uruguay Primera Division": "Uruguay",
-    "Uruguay Primera División": "Uruguay",
-    "Uzbek Super League": "Uzbekistán",
-    "V.League 1": "Vietnam",
-    "Veikkausliiga": "Finlandia",
-    "Victoria NPL": "Australia",
-    "Welsh Premier League": "Gales",
-    "Western Australia NPL": "Australia",
-    "Ykkonen": "Finlandia",
-    "Ykkosliiga": "Finlandia",
-    "Ykkönen": "Finlandia",
-    "Ykkösliiga": "Finlandia"
+MAPEO_ORIGINAL = {
+    "Bundesliga": "Alemania", "2. Bundesliga": "Alemania", "3. Liga": "Alemania", "Regionalliga": "Alemania", "U17 Bundesliga": "Alemania", "U19 Bundesliga": "Alemania", "Regionalliga Nord": "Alemania", "1. HNL": "Croacia", "2. HNL": "Croacia", "HNL": "Croacia",
+    "La Liga": "España", "La Liga 2": "España", "Primera RFEF": "España", "Segunda RFEF": "España","Premier League": "Inglaterra", "Championship": "Inglaterra", "League One": "Inglaterra", "League Two": "Inglaterra", "English National League": "Inglaterra", "English National League North South": "Inglaterra", "English Non-League Premier Division - Step 7": "Inglaterra", "Premier League 2": "Inglaterra",
+    "Serie A": "Italia", "Serie B": "Italia", "Serie C": "Italia", "Serie D - Girone A": "Italia", "Serie D - Girone B": "Italia", "Serie D - Girone C": "Italia", "Serie D - Girone D": "Italia", "Serie D - Girone E": "Italia", "Serie D - Girone F": "Italia", "Serie D - Girone G": "Italia", "Serie D - Girone H": "Italia", "Primavera 1": "Italia",
+    "Primeira Liga": "Portugal", "Portuguese Segunda Liga": "Portugal", "Portuguese Liga 3": "Portugal", "Campeonato de Portugal": "Portugal", "Portuguese Juniores U17": "Portugal", "Portuguese Juniores U19": "Portugal", "Portuguese Júniores U17": "Portugal", "Portuguese Júniores U19": "Portugal", "Portuguese Liga Revelacao Sub 23": "Portugal", "Portuguese Liga Revelação Sub 23": "Portugal",
+    "MLS": "Estados Unidos", "MLS Next Pro": "Estados Unidos", "USL Championship": "Estados Unidos", "USL League 1": "Estados Unidos", "NCAA D1": "Estados Unidos", "NCAA D2": "Estados Unidos", "NCAA D3": "Estados Unidos", "Canadian Premier League": "Canadá",
+    "Argentina Copa de la Liga": "Argentina", "Argentina LPF": "Argentina", "Argentina Primera Nacional": "Argentina", "Argentina Reserve League": "Argentina", "Brasileirao": "Brasil", "Brasileirão": "Brasil", "Brazil Serie B": "Brasil", "Brazil Serie C": "Brasil", "A-League Men": "Australia", "Australian NPLs": "Australia", "Capital Territory NPL": "Australia", "New South Wales NPL": "Australia", "Queensland NPL": "Australia", "Queensland Premier League": "Australia", "South Australia NPL": "Australia", "South Australia State League 1": "Australia", "Victoria NPL": "Australia", "Western Australia NPL": "Australia",
+    "Liga MX": "México", "Liga de Expansion MX": "México", "Liga de Expansión MX": "México", "Mexican U17 League": "México", "Mexican U18 League": "México", "Mexican U19 League": "México", "Mexican U23 League": "México",
+    "Colombian Primera A": "Colombia", "Colombian Torneo BetPlay": "Colombia", "Ligue 1": "Francia", "Ligue 2": "Francia", "French National 1": "Francia","Eredivisie": "Países Bajos", "Eerste Divisie": "Países Bajos", "Tweede Divisie": "Países Bajos", "Super Lig": "Turquía", "Süper Lig": "Turquía", "Turkish 1. Lig": "Turquía",
+    "Allsvenskan": "Suecia", "Superettan": "Suecia", "Ettan": "Suecia", "Eliteserien": "Noruega", "OBOS Ligaen": "Noruega", "Norwegian 2. Division": "Noruega", "Veikkausliiga": "Finlandia", "Ykkonen": "Finlandia", "Ykkönen": "Finlandia", "Ykkosliiga": "Finlandia", "Ykkösliiga": "Finlandia",
+    "Danish 1. Division": "Dinamarca", "Danish 2. Division": "Dinamarca", "Danish 3. Division": "Dinamarca", "Danish U17 Division": "Dinamarca", "Danish U17 Ligaen": "Dinamarca", "Danish U19 Division": "Dinamarca", "Danish U19 Ligaen": "Dinamarca",
+    "Czech Fortuna Liga": "República Checa", "Czech FNL": "República Checa", "Czech 1. Liga U19": "República Checa", "Czech U17 League": "República Checa", "Slovak Super Liga": "Eslovaquia", "Slovak 2. Liga": "Eslovaquia", "Slovak U19 League": "Eslovaquia", "Ekstraklasa": "Polonia", "Polish I Liga": "Polonia", "Polish II Liga": "Polonia",
+    "NB I": "Hungria", "NB II": "Hungria", "Russian Premier League": "Rusia", "Russian First League": "Rusia", "Ukrainian Premier League": "Ucrania", "Ukrainian Persha Liga": "Ucrania", "Ukrainian U19 League": "Ucrania", "Serbian Super Liga": "Serbia", "Serbian Prva Liga": "Serbia", "Serbian U17 League": "Serbia", "Serbian U19 League": "Serbia",
+    "Romanian Superliga": "Rumanía", "Romanian Liga II": "Rumanía", "Romanian Liga Elitelor U17": "Rumanía", "Romanian Liga Tineret U18": "Rumanía", "Bulgarian First League": "Bulgaria", "Slovenian 1. SNL": "Eslovenia", "Slovenian 2. SNL": "Eslovenia", "Bosnian Premier League": "Bosnia", "North Macedonia First League": "Macedonia del Norte",
+    "Montenegro First League": "Montenegro", "Montenegro Second League": "Montenegro", "Kosovo Superliga": "Kosovo", "Albanian Kategoria Superiore": "Albania", "Chinese Super League": "China", "China League One": "China", "China League Two": "China",
+    "J1": "Japón", "J2": "Japón", "J3": "Japón", "K League 1": "Corea del Sur", "K League 2": "Corea del Sur", "K3 League": "Corea del Sur", "K4 League": "Corea del Sur", "Indian Super League": "India", "Thai League 1": "Tailandia", "Thai League 2": "Tailandia", "Malaysian Super League": "Malasia", "Singapore Premier League": "Singapur", "Hong Kong Premier League": "Hong Kong", "V.League 1": "Vietnam", "Cambodian Premier League": "Camboya", "BRI Liga 1": "Indonesia",
+    "Saudi Pro League": "Arabia Saudita", "Saudi Division 1": "Arabia Saudita", "UAE Pro League": "Emiratos Árabes", "Qatari Stars League": "Catar", "Jordan Pro League": "Jordania", "Bahrain Premier League": "Baréin", "Ligat ha'Al": "Israel", "Liga Leumit": "Israel",
+    "Austrian Bundesliga": "Austria", "Belgian Pro League": "Belgica", "Belgian First Division B": "Belgica", "Austrian 2. Liga": "Austria", "Swiss Super League": "Suiza", "Swiss Challenge League": "Suiza", "Swiss 1. Liga Promotion": "Suiza", "Swiss 1. Liga Classic": "Suiza", "Swiss U17 Elite": "Suiza", "Swiss U19 Elite": "Suiza",
+    "Greek Super League": "Grecia", "Greek Super League 2": "Grecia", "Greek U19 Super League": "Grecia", "Cyprus 1. Division": "Chipre", "Cyprus 2. Division": "Chipre", "Irish Premier Division": "Irlanda", "Irish First Division": "Irlanda", "Northern Irish Premiership": "Irlanda del Norte", "Welsh Premier League": "Gales",
+    "Scottish Premiership": "Escocia", "Scottish Championship": "Escocia", "Scottish League One": "Escocia", "Scottish League Two": "Escocia", "Luxembourg National Division": "Luxemburgo", "Malta Premier League": "Malta", "Malta Challenge League": "Malta", "Andorra Primera Divisió": "Andorra", "Andorra Primera Divisio": "Andorra",
+    "Iceland 1. Deild": "Islandia", "Besta-deild karla": "Islandia", "Faroe Islands Meistaradeildin": "Islas Feroe", "Azeri Premyer Liqa": "Azerbaiyán", "Azeri Birinci Dasta": "Azerbaiyán", "Armenian Premier League": "Armenia", "Erovnuli Liga": "Georgia", "Erovnuli Liga 2": "Georgia", "Kazakh Premier League": "Kazajistán", "Kazakh 1. Division": "Kazajistán", "Kazakh 2. Division": "Kazajistán", "Kazakh U16 League": "Kazajistán", "Kazakh U17 League": "Kazajistán", "Kazakh U18 League": "Kazajistán",
+    "Uzbek Super League": "Uzbekistán", "Kyrgyz Premier League": "Kirguistán", "Belarusian Premier League": "Bielorrusia", "Belarusian 1. Division": "Bielorrusia", "Belarusian Reserve League": "Bielorrusia", "Moldovan Super Liga": "Moldavia", "Estonia Meistriliiga": "Estonia", "Estonian Esiliiga A": "Estonia", "Latvian Virsliga": "Letonia", "Latvian 1. Liga": "Letonia", "Lithuanian A Lyga": "Lituania", "Lithuanian 1 Lyga": "Lituania",
+    "Chilean Primera Division": "Chile", "Chilean Primera División": "Chile", "Chilean Primera B": "Chile", "Uruguay Primera Division": "Uruguay", "Uruguay Primera División": "Uruguay", "Paraguay Division Profesional": "Paraguay", "Peruvian Liga 1": "Perú", "Ecuador Liga Pro": "Ecuador", "Bolivian LFPB": "Bolivia",
+    "Costa Rican Primera Division": "Costa Rica", "Costa Rican Primera División": "Costa Rica", "Guatemalan Liga Nacional": "Guatemala", "Honduran Liga Nacional": "Honduras", "El Salvador Primera Division": "El Salvador", "El Salvador Primera División": "El Salvador", "Panama LPF": "Panamá", "Nicaragua Primera Division": "Nicaragua",
+    "New Zealand National League": "Nueva Zelanda", "South African PSL": "Sudáfrica", "Egyptian Premier League": "Egipto", "Botola Pro": "Marruecos", "Tunisia Ligue 1": "Túnez", "Nigerian Creative Championship": "Nigeria","Superliga": "Dinamarca_Serbia"
 }
 
-def clasificar_pais(nombre_archivo: str) -> str:
-    """Busca en el diccionario a qué país pertenece la liga.
-    Ordena las llaves por longitud para que 'La Liga 2' se detecte antes que 'La Liga'."""
-    # Ordenamos de mayor a menor longitud para evitar pisar nombres cortos
+# Añadimos los faltantes por si acaso (Para evitar errores de clasificación)
+FALTANTES = {
+    "CHALLENGER PRO LEAGUE": "Bélgica", "CZECH FIRST LEAGUE": "República Checa", 
+    "FRAUEN-BUNDESLIGA": "Alemania", "LIGA F": "España", "LIGA PROFESIONAL ARGENTINA": "Argentina",
+    "LIGUE 3": "Francia", "MEXICAN U21 LEAGUE": "México", "NORTHERN SUPER LEAGUE": "Canadá", 
+    "NWSL": "Estados Unidos", "PARAGUAYAN DIVISION PROFESIONAL": "Paraguay", "PREMIERE LIGUE": "Francia",
+    "QATARI SECOND DIVISION": "Catar", "ROMANIAN LIGA 1": "Rumania", "SEGUNDA DIVISION": "España", 
+    "SLOVAK 1. LIGA": "Eslovaquia", "SOUTH AFRICA PSL": "Sudáfrica", "SUPER LEAGUE GREECE": "Grecia",
+    "USL LEAGUE ONE": "Estados Unidos", "USL SUPER LEAGUE": "Estados Unidos",
+    "VENEZUELAN PRIMERA DIVISION": "Venezuela", "VIRSLIGA": "Letonia", "VROUWEN EREDIVISIE": "Países Bajos", 
+    "WORLD CUP": "Internacional", "BESTA-DEILD KARLA": "Islandia"
+}
+
+MAPEO_PAISES = {k.upper(): v for k, v in MAPEO_ORIGINAL.items()}
+MAPEO_PAISES.update(FALTANTES)
+
+def obtener_pais_inteligente(csv_path: Path, carpeta_raiz: Path) -> str:
+    carpeta_padre = csv_path.parent.name
+    if csv_path.parent != carpeta_raiz:
+        return carpeta_padre
+        
+    nombre_archivo = csv_path.name.upper()
     claves_ordenadas = sorted(MAPEO_PAISES.keys(), key=len, reverse=True)
-    
     for liga in claves_ordenadas:
         if nombre_archivo.startswith(liga):
             return MAPEO_PAISES[liga]
             
-    return "Internacional" # Por si se cuela algún archivo desconocido
+    return "Internacional"
 
-def convertir_csv_a_parquet(csv_path: Path, parquet_path: Path):
-    """Convierte un CSV a Parquet hipercomprimido usando DuckDB."""
-    parquet_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    csv_str = str(csv_path).replace("\\", "/")
-    parq_str = str(parquet_path).replace("\\", "/")
-    
-    query = f"""
-        COPY (SELECT * FROM read_csv_auto('{csv_str}', header=True)) 
-        TO '{parq_str}' 
-        (FORMAT PARQUET, COMPRESSION ZSTD);
-    """
-    
-    with duckdb.connect(':memory:') as conn:
-        conn.execute(query)
-
-def procesar_carpeta(dir_origen: Path, dir_destino: Path, tipo_dato: str):
-    print(f"\n🔍 Analizando carpeta de {tipo_dato} ({dir_origen})...")
-    
-    if not dir_origen.exists():
-        print(f"⚠️ La carpeta {dir_origen} no existe. Saltando...")
+def procesar_jugadores():
+    print("\n🏃‍♂️ PROCESANDO JUGADORES (Con Matemáticas)...")
+    if not DIR_JUGADORES_CSV.exists():
+        print(f"⚠️ No existe la carpeta {DIR_JUGADORES_CSV}")
         return
 
-    archivos_procesados = 0
-    archivos_saltados = 0
+    archivos = list(DIR_JUGADORES_CSV.rglob("*.csv"))
+    if not archivos:
+        print("⚠️ No hay CSVs de jugadores.")
+        return
 
-    for csv_path in dir_origen.rglob("*.csv"):
-        nombre_archivo = csv_path.name
+    for csv_path in archivos:
+        nombre = csv_path.stem
+        pais = obtener_pais_inteligente(csv_path, DIR_JUGADORES_CSV)
         
-        # Obtenemos el país cruzándolo con el gran diccionario
-        pais = clasificar_pais(nombre_archivo)
+        partes = nombre.rsplit(' ', 1)
+        liga_sucia, temp = (partes[0], partes[1]) if len(partes) == 2 else (nombre, "Unknown")
         
-        # 1. ¿Es una temporada activa?
-        es_activa = any(temp in nombre_archivo for temp in TEMPORADAS_ACTIVAS)
+        carpeta_destino = DIR_JUGADORES_PARQUET / pais
+        parquet_path = carpeta_destino / f"{nombre}.parquet"
         
-        # Construimos la ruta: Data_Parquet / Jugadores / España / La Liga 25-26.parquet
-        parquet_path = dir_destino / pais / csv_path.with_suffix('.parquet').name
-        
-        # 2. ¿Ya existe el Parquet histórico?
-        existe_parquet = parquet_path.exists()
-        
-        if existe_parquet and not es_activa:
-            # Es histórico y ya está procesado -> LO SALTAMOS
-            archivos_saltados += 1
-        else:
-            # Es temporada actual o archivo nuevo
-            print(f"   ⚙️ Procesando: [{pais}] {nombre_archivo} ...")
-            try:
-                convertir_csv_a_parquet(csv_path, parquet_path)
-                archivos_procesados += 1
-            except Exception as e:
-                print(f"   ❌ Error con {nombre_archivo}: {e}")
+        es_activa = any(t in temp for t in TEMPORADAS_ACTIVAS)
+        if parquet_path.exists() and not es_activa:
+            continue
 
-    print(f"✅ {tipo_dato}: {archivos_procesados} actualizados | ⏭️ {archivos_saltados} históricos saltados.")
+        print(f"⚙️  Calculando y Organizando: [{pais}] {nombre}...")
+        try:
+            df = pd.read_csv(csv_path, dtype=str, low_memory=False)
+            
+            df = df.loc[:, ~df.columns.duplicated()].copy()
+            df = df.reset_index(drop=True)
+            
+            df = df.assign(
+                Pais_Liga=pais, Competition=liga_sucia, 
+                Season=temp, League_Weight=PESOS_LIGAS.get(liga_sucia, 0.30)
+            )
+            df = df[~df['Player'].astype(str).str.contains(r'\[REF\]', na=False)].copy()
+
+            COLS_STR = {'Player', 'Team', 'Team within selected timeframe', 'Position', 
+                        'Primary position', 'Secondary position', 'Third position', 
+                        'Competition', 'League', 'Birth country', 'Foot', 'Contract expires', 'Season', 'Pais_Liga', 'Wyscout id'}
+            
+            for col in df.columns:
+                if col in COLS_STR:
+                    df[col] = df[col].fillna("N/D").astype(str)
+                else:
+                    df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.', regex=False).str.replace('-', '0', regex=False), errors='coerce').fillna(0.0)
+
+            extra_masters = _cols_nuevas_metricas(df)
+            if extra_masters:
+                df = pd.concat([df, pd.DataFrame(extra_masters, index=df.index).fillna(0.0)], axis=1)
+                df = df.loc[:, ~df.columns.duplicated(keep='last')].copy()
+
+            COLS_META = {'Player', 'Team', 'Competition', 'League', 'Season', 'Position', 'Primary position', 
+                         'Secondary position', 'Third position', 'Birth country', 'Foot', 'Contract expires', 
+                         'Age', 'Matches played', 'Minutes played', 'Height', 'Weight', 'League_Weight', 'Wyscout id', 'Pais_Liga'}
+            col_num = [c for c in df.select_dtypes(include=[np.number]).columns if c not in COLS_META]
+            METRICAS_INVERSAS = ['conceded', 'against', 'losses', 'turnovers', 'fouls', 'yellow', 'red', 'pérdidas', 'faltas', 'encajados']
+            
+            df = motor_escalado_unico(df, col_num, METRICAS_INVERSAS, None, True, 0)
+
+            todos_los_estilos = {**estilos_gk, **estilos_cb, **estilos_lt, **estilos_mcd, **estilos_int, **estilos_mp, **estilos_ext, **estilos_del, **estilos_med}
+            df = motor_calculo_ratings(df, diccionarios=todos_los_estilos, mascara_posicion=None, aplicar_peso_liga=True)
+
+            carpeta_destino.mkdir(parents=True, exist_ok=True)
+            df.to_parquet(parquet_path, engine='pyarrow', index=False, compression='zstd')
+
+        except Exception as e:
+            print(f"❌ Error en {nombre}: {e}")
+
+def procesar_equipos():
+    print("\n🛡️ PROCESANDO EQUIPOS...")
+    if not DIR_EQUIPOS_CSV.exists():
+        print(f"⚠️ No existe la carpeta {DIR_EQUIPOS_CSV}")
+        return
+
+    archivos = list(DIR_EQUIPOS_CSV.rglob("*.csv"))
+    for csv_path in archivos:
+        nombre = csv_path.stem
+        pais = obtener_pais_inteligente(csv_path, DIR_EQUIPOS_CSV)
+        
+        carpeta_destino = DIR_EQUIPOS_PARQUET / pais
+        parquet_path = carpeta_destino / f"{nombre}.parquet"
+        
+        es_activa = any(t in nombre for t in TEMPORADAS_ACTIVAS)
+        if parquet_path.exists() and not es_activa:
+            continue
+
+        print(f"⚙️  Organizando Equipo: [{pais}] {nombre}...")
+        try:
+            df = pd.read_csv(csv_path, dtype=str, low_memory=False)
+            df['Pais_Eq'] = pais
+            
+            COLS_STR_EQ = {'Team', 'Competition_Eq', 'Pais_Eq', 'Season', 'Match'}
+            for col in df.columns:
+                if col in COLS_STR_EQ:
+                    df[col] = df[col].fillna("N/D").astype(str)
+                else:
+                    df[col] = pd.to_numeric(df[col].astype(str).str.replace(',', '.', regex=False).str.replace('-', '0', regex=False), errors='coerce').fillna(0.0)
+
+            carpeta_destino.mkdir(parents=True, exist_ok=True)
+            df.to_parquet(parquet_path, engine='pyarrow', index=False, compression='zstd')
+        except Exception as e:
+            print(f"❌ Error en {nombre}: {e}")
 
 if __name__ == "__main__":
-    print("🚀 INICIANDO ETL: CSV a PARQUET (Clasificación Automática por Países)")    
-    procesar_carpeta(DIR_JUGADORES_CSV, DIR_JUGADORES_PARQUET, "JUGADORES")
-    procesar_carpeta(DIR_EQUIPOS_CSV, DIR_EQUIPOS_PARQUET, "EQUIPOS")
-    print("\n🎉 ¡Todos los datos están clasificados y listos en formato Parquet!")
+    print("🚀 INICIANDO SUPER ETL: Clasificación Inteligente + Matemáticas + Parquet")
+    procesar_jugadores()
+    procesar_equipos()
+    print("\n🎉 ¡ETL FINALIZADO! Tienes un Data Lake profesional listo para subir a GitHub.")
