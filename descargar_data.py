@@ -2,6 +2,7 @@ import os
 import requests
 from pathlib import Path
 import urllib.parse
+from config import GITHUB_TOKEN
 
 GITHUB_TOKEN = "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" 
 
