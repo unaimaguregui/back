@@ -7,14 +7,8 @@ from pathlib import Path
 # 1. IMPORTAMOS TUS MATEMÁTICAS (Desde tu Backend)
 # ==========================================
 from core.pandas import _cols_nuevas_metricas, motor_escalado_unico, motor_calculo_ratings
-from config.diccionarios import (
-    estilos_gk, estilos_cb, estilos_lt, estilos_mcd, 
-    estilos_int, estilos_mp, estilos_ext, estilos_del, estilos_med, PESOS_LIGAS
-)
+from config.diccionarios import (estilos_gk, estilos_cb, estilos_lt, estilos_mcd, estilos_int, estilos_mp, estilos_ext, estilos_del, estilos_med, PESOS_LIGAS)
 
-# ==========================================
-# 2. CONFIGURACIÓN DE CARPETAS Y DICCIONARIO
-# ==========================================
 TEMPORADAS_ACTIVAS = ["26-27", "2026"] 
 
 DIR_JUGADORES_CSV = Path("Data")
