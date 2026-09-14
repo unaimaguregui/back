@@ -30,7 +30,7 @@ from core.pandas import obtener_datos_sql
 from config.diccionarios import (
     mapa_posiciones, estilos_gk, estilos_cb, estilos_lt, estilos_mcd, 
     estilos_int, estilos_mp, estilos_ext, estilos_del, estilos_med,
-    radar_gk, radar_cb, radar_lt, radar_mcd, radar_int, radar_mp, radar_ext, radar_del, PESOS_LIGAS
+    radar_gk, radar_cb, radar_lt, radar_mcd, radar_int, radar_mp, radar_ext, radar_del, PESOS_LIGAS, MAPEO
 )
 
 from core.models import SquadPlannerPlayer, ShortlistPlayer
@@ -59,9 +59,7 @@ def get_db():
 
 def get_duckdb_conn():
     """ Abre la memoria RAM y enlaza los Parquets de forma protegida """
-    conn = duckdb.connect(':memory:')
-    
-    # 🛡️ ESCUDO ANTI-CRASHEOS PARA RENDER (Límites de RAM y CPU)
+    conn = duckdb.connect(':memory:')    
     conn.execute("PRAGMA memory_limit='150MB'")
     conn.execute("PRAGMA threads=1")
     
@@ -210,14 +208,11 @@ class TeamFitRequest(BaseModel):
     edad_max: Optional[int] = 99
     calidad_min: Optional[int] = 0
 
-# HELPER IA: Aislar cohortes desde DuckDB
 def _obtener_cohorte_jugador_duckdb(nombre_jugador: str, posicion_req: Optional[str] = None, ligas_mercado: List[str] = None, edad_min: int = 0, edad_max: int = 99):
-    # 🚀 PARSEAMOS EL NOMBRE Y EL EQUIPO
     nombre_real = nombre_jugador.split(" | ")[0].strip()
     equipo_real = nombre_jugador.split(" | ")[1].strip() if " | " in nombre_jugador else None
 
     with get_duckdb_conn() as conn:
-        # Filtramos por nombre Y equipo (adiós homónimos)
         if equipo_real:
             df_jug = conn.execute('SELECT * FROM dim_jugadores_stats WHERE Player = ? AND Team = ? ORDER BY Season DESC, "Minutes played" DESC LIMIT 1', [nombre_real, equipo_real]).df()
         else:
@@ -250,9 +245,7 @@ def _obtener_cohorte_jugador_duckdb(nombre_jugador: str, posicion_req: Optional[
     if nombre_real not in df_filtrado['Player'].values:
         df_filtrado = pd.concat([df_filtrado, df_cohorte[df_cohorte['Player'] == nombre_real]])
 
-    df_filtrado = df_filtrado[~df_filtrado['Player'].str.contains(r'\[REF\]', na=False)].copy()
-    
-    # 🚀 Devolvemos nombre_real para que los modelos no se confundan con el " | Equipo"
+    df_filtrado = df_filtrado[~df_filtrado['Player'].str.contains(r'\[REF\]', na=False)].copy()    
     return preparar_dataframe(df_filtrado), pos_final, nombre_real
 
 def cargar_pool_temporada_duckdb(ligas, temporadas, posicion, estilo):
@@ -266,9 +259,7 @@ def cargar_pool_temporada_duckdb(ligas, temporadas, posicion, estilo):
     
     col_rating = f"Rating_{estilo}"
     df_filtrado['Rating'] = df_filtrado[col_rating] if col_rating in df_filtrado.columns else 50
-    col_comp = 'Competition' if 'Competition' in df_filtrado.columns else 'League'
-    
-    # 🚀 AÑADIDO: Incluimos League_Weight para el cruce de datos
+    col_comp = 'Competition' if 'Competition' in df_filtrado.columns else 'League'    
     cols_extraer = ['Wyscout id', 'Player', 'Team', col_comp, 'Minutes played', 'Rating']
     if 'League_Weight' in df_filtrado.columns: cols_extraer.append('League_Weight')
         
@@ -277,23 +268,18 @@ def cargar_pool_temporada_duckdb(ligas, temporadas, posicion, estilo):
 
 def _comparar_temporadas_ia(payload: CompararTemporadasRequest, columna_diff: str, umbral: float, ascending: bool):
     if not payload.ligas: return None, "Faltan ligas."
-    
     df_p = cargar_pool_temporada_duckdb(payload.ligas, [payload.temp_pasada], payload.posicion, payload.estilo)
     df_a = cargar_pool_temporada_duckdb(payload.ligas, [payload.temp_actual], payload.posicion, payload.estilo)
     
     if df_p.empty or df_a.empty: return None, "No hay suficientes jugadores para comparar."
 
-    df_merge = pd.merge(df_p, df_a, on=['Wyscout id', 'Player'], suffixes=('_pasado', '_actual'))
-    
-    # 🚀 LA FÓRMULA PROFESIONAL: Ajuste por coeficiente de Liga
+    df_merge = pd.merge(df_p, df_a, on=['Wyscout id', 'Player'], suffixes=('_pasado', '_actual'))    
     if 'League_Weight_actual' in df_merge.columns and 'League_Weight_pasado' in df_merge.columns:
         df_merge['Rating_Ponderado_actual'] = df_merge['Rating_actual'] * df_merge['League_Weight_actual'].fillna(1.0)
         df_merge['Rating_Ponderado_pasado'] = df_merge['Rating_pasado'] * df_merge['League_Weight_pasado'].fillna(1.0)
     else:
         df_merge['Rating_Ponderado_actual'] = df_merge['Rating_actual']
         df_merge['Rating_Ponderado_pasado'] = df_merge['Rating_pasado']
-
-    # Calculamos la diferencia basándonos en la dificultad real
     df_merge[columna_diff] = (df_merge['Rating_Ponderado_actual'] - df_merge['Rating_Ponderado_pasado']) * (1 if ascending else -1)
     
     filtro_base = df_merge['Minutes played_actual'] >= payload.mins
@@ -348,16 +334,13 @@ def escanear_mercado_background():
             MOTOR_ALERTAS = MOTOR_ALERTAS[:15]
             
     except duckdb.IOException:
-        # Silencio: La base de datos está ocupada (seguramente ejecutando el ETL).
         pass
     except duckdb.ConnectionException:
-        # Silencio: Choque de configuración temporal.
         pass
     except Exception as e:
-        pass # Silenciamos los errores de background para no ensuciar la consola
+        pass 
     
 
-# Nuestro primer Endpoint Asíncrono (async def)
 @app.get("/")
 async def root():
     return {"status": "ok", "mensaje": "¡FastAPI está vivo y respirando!"}
@@ -366,7 +349,6 @@ async def root():
 async def health_check():
     return {"status": "ok", "database": "DuckDB ready"}
 
-# Variable global ultrarrápida en memoria para el catálogo
 _CACHE_CATALOGO = []
 _CACHE_RADAR_ACTUAL = {}
 _CACHE_PLANTILLA = pd.DataFrame()
@@ -379,7 +361,6 @@ _lock_alertas = threading.Lock()
 def obtener_catalogo():
     try:
         with get_duckdb_conn() as conn:
-            # Consulta SQL corregida: solo usamos 'Competition' que es la columna real de Wyscout
             query = """
                 SELECT DISTINCT 
                     Competition as liga, 
@@ -401,9 +382,7 @@ async def jugs_tot(db: Session = Depends(get_db)):
     try:
         with get_duckdb_conn() as conn:
             query = "SELECT DISTINCT Player || ' | ' || Team AS Combo FROM dim_jugadores_stats WHERE Player IS NOT NULL"
-            df = conn.execute(query).df()
-            
-            # Pasamos la columna directamente a una lista de Python de golpe
+            df = conn.execute(query).df()            
             jugadores_db = df['Combo'].dropna().tolist()
             
         jugadores_pizarra = db.query(SquadPlannerPlayer.player_name).filter_by(user_id='default_user').all()
@@ -473,7 +452,7 @@ async def sq_add(payload: JugadorRequest, db: Session = Depends(get_db)):
         nuevo = SquadPlannerPlayer(user_id='default_user', player_name=nombre, is_fichaje=True)
         db.add(nuevo)
     elif jugador.is_deleted:
-        jugador.is_deleted = False # Lo sacamos de la papelera
+        jugador.is_deleted = False
     db.commit()
     return {"status": "ok"}
 
@@ -532,7 +511,6 @@ async def sq_get(db: Session = Depends(get_db)):
 @app.post("/api/procesar")
 async def procesar_datos(payload: ProcesarRequest):
     try:
-        # FastAPI ya ha validado que 'posicion' y 'estilo' vengan en el payload
         if not payload.posicion or not payload.estilo:
             raise HTTPException(status_code=400, detail="Falta seleccionar posición o estilo.")
 
@@ -547,9 +525,7 @@ async def procesar_datos(payload: ProcesarRequest):
                 query += f" AND Season IN ({temps_str})"
             df_crudo = conn.execute(query).df()
         if df_crudo.empty:
-            raise HTTPException(status_code=404, detail="No hay datos en las ligas seleccionadas.")
-                
-        # Limpiamos notas antiguas para calcular las nuevas en tiempo real
+            raise HTTPException(status_code=404, detail="No hay datos en las ligas seleccionadas.")                
         cols_to_drop = [c for c in df_crudo.columns if c.startswith('Rating_') or c == 'Rating']
         cols_to_drop += [c for c in df_crudo.columns if c.startswith('Score_') or c.endswith('Scale')]
         df_crudo.drop(columns=cols_to_drop, inplace=True, errors='ignore')
@@ -575,20 +551,15 @@ async def procesar_datos(payload: ProcesarRequest):
         df_base = df_filtrado[(df_filtrado['Minutes played'] >= payload.mins) & 
                               (df_filtrado['Age'] >= payload.edad_min) & 
                               (df_filtrado['Age'] <= payload.edad_max)].copy()
-        
-        # 🚀 FIX: AQUÍ HEMOS BORRADO EL FILTRO PREMATURO DE EQUIPOS. 
-        # Ahora dejamos pasar a toda la liga a la calculadora matemática.
 
         if df_base.empty: return {"jugadores": [], "conteo": ""}
 
-        # 3. Filtro de Ligas (Cohorte del usuario)
         col_comp = 'Competition' if 'Competition' in df_base.columns else 'League'
         if payload.ligas: 
             df_base = df_base[df_base[col_comp].isin(payload.ligas)].copy()
             
         if df_base.empty: return {"jugadores": [], "conteo": ""} 
 
-        # 4. Escalado y Ratings (Contexto Global contra toda la liga)
         COLS_META = {'Age', 'Matches played', 'Minutes played', 'Height', 'Weight', 'League_Weight', 'Wyscout id'}
         col_num = [c for c in df_base.select_dtypes(include=[np.number]).columns if c not in COLS_META and not c.startswith('Rating_')]
         METRICAS_INVERSAS = ['conceded', 'against', 'losses', 'turnovers', 'fouls', 'yellow', 'red', 'pérdidas', 'faltas', 'encajados']
@@ -607,8 +578,6 @@ async def procesar_datos(payload: ProcesarRequest):
         }.get(payload.posicion.split(' ')[0], estilos_del)
         
         df_base = motor_calculo_ratings(df_base, diccionarios=d_pos, mascara_posicion=None, aplicar_peso_liga=True)
-
-        # 5. Asignación de la Nota Visual (Rating)
         aplicar_penalizacion = len(payload.ligas) > 1 
 
         if payload.estilo == 'Personalizado' and payload.custom_weights:
@@ -648,11 +617,7 @@ async def procesar_datos(payload: ProcesarRequest):
                 df_base['Rating'] = 50
 
         # Tiers ajustados
-        df_base['Tier'] = df_base['Rating'].apply(
-            lambda r: 'S' if r >= 85 else ('A' if r >= 75 else ('B' if r >= 65 else ('C' if r >= 50 else 'D')))
-        )
-
-        # 6. Etiquetado Scouting Pro
+        df_base['Tier'] = df_base['Rating'].apply(lambda r: 'S' if r >= 85 else ('A' if r >= 75 else ('B' if r >= 65 else ('C' if r >= 50 else 'D'))))
         try:
             from core.pandas import generar_matriz_ortogonalidad
             matriz_ort = generar_matriz_ortogonalidad(d_pos)
@@ -681,7 +646,6 @@ async def procesar_datos(payload: ProcesarRequest):
         df_base['Mejor Estilo'] = df_base.apply(obtener_mejor_estilo_exacto, axis=1)
         df_base['Perfil_Scouting'] = df_base.apply(aplicar_etiqueta_real, axis=1)
 
-        # 🚀 FIX: APLICAMOS EL FILTRO DE EQUIPO AQUÍ AL FINAL (Filtro Puramente Visual)
         if payload.perfiles: 
             df_base = df_base[df_base['Perfil_Scouting'].isin(payload.perfiles)]
             
@@ -746,7 +710,6 @@ async def obtener_ficha(nombre_jugador: str, id: Optional[str] = None, posicion:
             c_jug = str(fila_raw.get('Competition', fila_raw.get('League', '')))
             nombre_real_jugador = str(fila_raw.get('Player'))
             
-            # 🚀 NUEVO: Cargamos a sus rivales dependiendo de las ligas elegidas en el Buscador PRO
             if ligas_mercado:
                 lista_ligas = [l.strip() for l in ligas_mercado.split(',')]
                 ligas_str = ", ".join([f"'{l.replace(chr(39), '')}'" for l in lista_ligas])
@@ -754,7 +717,6 @@ async def obtener_ficha(nombre_jugador: str, id: Optional[str] = None, posicion:
                     f"SELECT * FROM dim_jugadores_stats WHERE Season = ? AND Competition IN ({ligas_str})",
                     [t_jug]
                 ).df()
-                # Blindaje: asegurar que él mismo esté en la cohorte para poder compararlo
                 if nombre_real_jugador not in df_peers['Player'].values:
                     df_peers = pd.concat([df_peers, df_jugador]).drop_duplicates(subset=['Player'])
             else:
@@ -867,25 +829,20 @@ async def obtener_ficha(nombre_jugador: str, id: Optional[str] = None, posicion:
     radar_fig = dibujar_radares(df_peers, [nombre_real_jugador], d_radar) 
     scatters_figs = dibujar_scatter_multi(df_peers, nombre_real_jugador, req_pos)
     
-    # =========================================================
-    # 🚀 NUEVO MOTOR DE CLONACIÓN PCA PARA LA FICHA DEL JUGADOR
-    # =========================================================
     clones = []
     try:
         from core.ml import generar_modelo_similitud
-        
-        # Invocamos al motor PCA de manera "invisible"
+
         fig_json, pca_clones = generar_modelo_similitud(df_peers, nombre_real_jugador, d_estilos)
         
         if pca_clones:
             for c in pca_clones:
-                c['Tipo'] = 'Liga' # Compatibilidad con el frontend antiguo
-            clones = pca_clones[:10] # Top 10 clones para la ficha
+                c['Tipo'] = 'Liga' 
+            clones = pca_clones[:10]
             
     except Exception as e:
         print(f"Error generando clones PCA en ficha: {e}")
 
-    # No mandamos 'grafico_pca' para mantener la interfaz limpia
     return {
         "info": info, 
         "pos_fig": pos_fig, 
@@ -900,13 +857,10 @@ async def buscar_similares(payload: ClonadorRequest):
         nombre_jugador = payload.nombre.strip()
         if not nombre_jugador: 
             raise HTTPException(status_code=400, detail="Selecciona un jugador.")
-            
-        # Recibimos las 3 variables
+        
         df_filtrado, gen_pos, nombre_real = _obtener_cohorte_jugador_duckdb(
             nombre_jugador, payload.posicion, payload.ligas, payload.edad_min, payload.edad_max
         )
-        
-        # 🚀 ESCUDO FINAL: Si ahogas al mercado y hay menos de 5, avisa en lugar de romper
         if len(df_filtrado) < 5:
             raise HTTPException(status_code=400, detail=f"Filtros muy estrictos. Solo hay {len(df_filtrado)} jugador(es) disponibles. La IA necesita al menos 5 para comparar. ¡Amplía la edad o añade más ligas!")
             
@@ -924,7 +878,7 @@ async def buscar_similares(payload: ClonadorRequest):
             raise HTTPException(status_code=400, detail="No hay datos suficientes para clonar.")
 
         return {
-            "objetivo": nombre_real, # Así el Frontend solo lee "A. Gordon"
+            "objetivo": nombre_real,
             "mejor_rol": gen_pos, 
             "grafico_pca": fig_json,
             "similares": clones_dict
@@ -993,7 +947,6 @@ async def obtener_evolucion(wyscout_id: str, posicion: str = 'Delantero'):
             
         if df_hist.empty: raise HTTPException(status_code=404, detail="No se encontraron datos históricos en DuckDB.")
 
-        # Eliminamos duplicados por si jugó en 2 equipos el mismo año
         df_hist = df_hist.drop_duplicates(subset=['Season'])
 
         res = []
@@ -1003,7 +956,6 @@ async def obtener_evolucion(wyscout_id: str, posicion: str = 'Delantero'):
             'Extremo': estilos_ext, 'Medio': estilos_med
         }.get(posicion.split(' ')[0], estilos_del)
 
-        # 🚀 AÑADIDO: Mapeo de Radares Tácticos para las fases
         d_radar = {
             'Portero': radar_gk, 'Central': radar_cb, 'Lateral': radar_lt, 
             'Pivote': radar_mcd, 'Interior': radar_int, 'Mediapunta': radar_mp, 
@@ -1033,17 +985,13 @@ async def obtener_evolucion(wyscout_id: str, posicion: str = 'Delantero'):
             if not rat_est: rat_est = {"Base": 50}
             rat_est['Rating'] = max(rat_est.values())
             
-            # 🚀 AÑADIDO: Extracción de métricas para los 3 radares de fases
             fases_radar = {}
             for fase, metricas in d_radar.items():
                 fases_radar[fase] = {}
                 for m in metricas:
-                    # Buscamos la métrica escalada (Scale) y si no, cogemos la cruda
                     val = row.get(f"{m} Scale")
                     if pd.isna(val): val = row.get(m, 50)
-                    
                     try:
-                        # Aseguramos que encaje en el radar de 0 a 100
                         fases_radar[fase][m] = min(max(int(float(val)), 0), 100)
                     except:
                         fases_radar[fase][m] = 50
@@ -1062,7 +1010,7 @@ async def obtener_evolucion(wyscout_id: str, posicion: str = 'Delantero'):
                 "Minutos": minutos_jugados, "Goles": int(row.get('Goals', 0)) if pd.notna(row.get('Goals')) else 0,
                 "Asistencias": int(row.get('Assists', 0)) if pd.notna(row.get('Assists')) else 0,
                 "Ratings": rat_est, 
-                "Fases": fases_radar, # 🚀 LO MANDAMOS AL FRONTEND
+                "Fases": fases_radar,
                 "Perfil": perfil_yoy
             })
             
@@ -1097,8 +1045,6 @@ async def predecir_potencial(nombre_jugador: str, posicion: str = 'Delantero'):
 async def api_simular_traspaso(payload: SimularTraspasoRequest):
     try:
         nombre_jugador, liga_destino, posicion = payload.jugador, payload.liga_destino, payload.posicion
-        
-        # Parseamos el equipo
         nombre_real = nombre_jugador.split(" | ")[0].strip()
         equipo_real = nombre_jugador.split(" | ")[1].strip() if " | " in nombre_jugador else None
         
@@ -1127,10 +1073,6 @@ async def api_simular_traspaso(payload: SimularTraspasoRequest):
     except HTTPException: raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error del simulador: {str(e)}")
-    
-# ==========================================
-# RUTAS DE ANÁLISIS DE EQUIPOS Y TÁCTICA
-# ==========================================
 
 def obtener_datos_equipos_tacticos_duckdb():
     try:
@@ -1143,7 +1085,6 @@ def obtener_datos_equipos_tacticos_duckdb():
 async def api_equipos_tacticos():
     try:
         with get_duckdb_conn() as conn:
-            # 🚀 IA: Leemos la liga y país nativos de la tabla de equipos. Cero contaminación.
             query = """
                 SELECT 
                     Team,
@@ -1302,27 +1243,20 @@ async def calcular_team_fit(payload: TeamFitRequest):
         if df_tactico.empty or payload.equipo_tactico not in df_tactico['Team'].values: 
             raise HTTPException(status_code=404, detail="No hay datos tácticos para este equipo.")
             
-        # =========================================================
-        # 🚀 FIX SUPREMO: EL CERROJO SQL DE DUCKDB
-        # =========================================================
         with get_duckdb_conn() as conn:
             query = "SELECT * FROM dim_jugadores_stats WHERE 1=1"
             
-            # 🚀 ALERTA DE SEGURIDAD: Si no hay ligas, bloqueamos la búsqueda
             if not payload.ligas or len(payload.ligas) == 0:
                 raise HTTPException(status_code=400, detail="Debes seleccionar al menos una Liga de Mercado válida.")
             
-            # Cerrojo 1: Ligas
             if payload.ligas and len(payload.ligas) > 0:
                 ligas_str = ", ".join([f"'{str(l).replace(chr(39), '')}'" for l in payload.ligas])
                 query += f" AND Competition IN ({ligas_str})"
                 
-            # Cerrojo 2: Temporada
             if payload.temporadas and len(payload.temporadas) > 0:
                 temps_str = ", ".join([f"'{str(t).replace(chr(39), '')}'" for t in payload.temporadas])
                 query += f" AND Season IN ({temps_str})"
                 
-            # Cerrojo 3: Anti-Femeninas y Anti-Juveniles directos en BBDD
             query += """
                 AND UPPER(Team) NOT LIKE '% WOMEN%'
                 AND UPPER(Team) NOT LIKE '% FEMENINO%'
@@ -1340,7 +1274,6 @@ async def calcular_team_fit(payload: TeamFitRequest):
 
         if df_crudo.empty: 
             raise HTTPException(status_code=404, detail="No hay jugadores en las ligas seleccionadas.")
-        # =========================================================
         
         from core.pandas import filtrar_por_posicion_real, preparar_dataframe
         df_filtrado = filtrar_por_posicion_real(df_crudo, mapa_posiciones.get(payload.posicion))
@@ -1352,7 +1285,6 @@ async def calcular_team_fit(payload: TeamFitRequest):
 
         from core.ml import generar_target_estilo_equipo, calcular_style_fit, calcular_quality_score
         
-        # 2. GENERAMOS EL TARGET HÍBRIDO TÁCTICO
         target_z, saliencia, perfil_texto = generar_target_estilo_equipo(
             team_row=df_tactico[df_tactico['Team'] == payload.equipo_tactico].iloc[0],
             pos=payload.posicion,
@@ -1361,10 +1293,8 @@ async def calcular_team_fit(payload: TeamFitRequest):
             team_name=payload.equipo_tactico    
         )
 
-        # 3. Calculamos la Distancia Matemática de Encaje
         df_filtrado = calcular_style_fit(df_filtrado, target_z, saliencia, usar_mahalanobis=True)
 
-        # 4. Calculamos la Calidad Absoluta
         d_pos = {
             'Portero': estilos_gk, 'Central': estilos_cb, 'Lateral Izquierdo': estilos_lt, 'Lateral Derecho': estilos_lt,
             'Pivote': estilos_mcd, 'Interior': estilos_int, 'Mediapunta': estilos_mp, 
@@ -1381,7 +1311,6 @@ async def calcular_team_fit(payload: TeamFitRequest):
 
         df_filtrado['Rating_Fit'] = df_filtrado['Style_Fit_Score'].fillna(50).round().astype(int)
         
-        # 5. FILTROS FINALES DE LA INTERFAZ
         df_final = df_filtrado[(df_filtrado['Minutes played'] >= payload.mins) & 
                                (df_filtrado['Age'] >= payload.edad_min) & 
                                (df_filtrado['Age'] <= payload.edad_max) &
@@ -1416,7 +1345,7 @@ async def calcular_team_fit(payload: TeamFitRequest):
          
 @app.post("/api/team_fit_radar")
 async def team_fit_radar(payload: TeamFitRadarRequest):
-    pesos = payload.pesos # 🚀 AHORA ESTOS SON LOS TARGET PERCENTILES (0-100)
+    pesos = payload.pesos
     if not pesos: raise HTTPException(status_code=400, detail="Sin pesos tácticos configurados.")
     try:
         with get_duckdb_conn() as conn:
@@ -1436,7 +1365,6 @@ async def team_fit_radar(payload: TeamFitRadarRequest):
         
             if df.empty: raise HTTPException(status_code=404, detail="Jugador no encontrado.")
             
-            # Extraemos la cohorte del jugador para comparar manzanas con manzanas
             temp = df['Season'].iloc[0]
             comp = df['Competition'].iloc[0]
             df_cohort = conn.execute("SELECT * FROM dim_jugadores_stats WHERE Season = ? AND Competition = ?", [temp, comp]).df()
@@ -1449,7 +1377,6 @@ async def team_fit_radar(payload: TeamFitRadarRequest):
             if m in df.columns and m in df_cohort.columns:
                 val_bruto = df[m].iloc[0]
                 
-                # 🚀 LA MAGIA: Convertimos su valor bruto en Percentil comparándolo con su liga
                 serie = pd.to_numeric(df_cohort[m], errors='coerce').dropna()
                 if len(serie) > 0:
                     player_pct = (serie < val_bruto).mean() * 100
@@ -1463,7 +1390,6 @@ async def team_fit_radar(payload: TeamFitRadarRequest):
         if not etiquetas:
             raise HTTPException(status_code=400, detail="No hay métricas válidas para dibujar el radar.")
 
-        # Cerramos el polígono para que el radar se dibuje bien
         valores_jugador.append(valores_jugador[0])
         valores_demanda.append(valores_demanda[0])
         etiquetas.append(etiquetas[0])
@@ -1492,20 +1418,16 @@ async def team_fit_radar(payload: TeamFitRadarRequest):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
     
-# ==========================================
-# RUTAS DE SISTEMA (SYNC, ALERTAS Y GUARDAR)
 
 @app.get("/api/alertas")
 async def obtener_alertas():
     if not MOTOR_ALERTAS:
-        # Si está vacío, forzamos un escaneo rápido
         escanear_mercado_background()
     return MOTOR_ALERTAS
 
 @app.get("/api/guardar")
 async def guardar():
     try:
-        # En FastAPI, las descargas de archivos generados en memoria se hacen así:
         datos_guardar = {
             "pesos_teamfit": _CACHE_TEAM_FIT_PESOS,
             "radar_actual": _CACHE_RADAR_ACTUAL,
@@ -1515,7 +1437,6 @@ async def guardar():
         mem.write(json.dumps(datos_guardar).encode('utf-8'))
         mem.seek(0)
         
-        # Devolvemos un StreamingResponse con las cabeceras de descarga
         return StreamingResponse(
             iter([mem.getvalue()]), 
             media_type="application/json", 
@@ -1572,7 +1493,6 @@ async def sync_data():
 def obtener_nombres_jugadores():
     try:
         with get_duckdb_conn() as conn:
-            # Saca todos los nombres únicos ordenados alfabéticamente
             df = conn.execute("SELECT DISTINCT Player FROM dim_jugadores_stats WHERE Player IS NOT NULL ORDER BY Player").df()
             return df['Player'].tolist()
     except:
@@ -1589,11 +1509,7 @@ def unificar_liga_y_pais(liga_raw, pais_raw):
     """ Asignación 100% Manual, a prueba de fallos mediante Diccionario Exacto """
     import re
     l_original = str(liga_raw).upper().strip()
-
-    # 1. LIMPIEZA DEL AÑO (Ej: "Premier League 24-25" -> "PREMIER LEAGUE")
     l = re.sub(r'\s(\d{2}-\d{2}|\d{4})$', '', l_original).strip()
-    
-    # 2. BARRERAS EXCLUYENTES: Ligas Femeninas y Mundial (¡FUERA!)
     if l in [
         "FRAUEN-BUNDESLIGA", "LIGA F", "NWSL", "PREMIERE LIGUE", 
         "SERIE A FEMMINILE", "USL SUPER LEAGUE", "VROUWEN EREDIVISIE", 
@@ -1601,256 +1517,9 @@ def unificar_liga_y_pais(liga_raw, pais_raw):
     ] or "WOMEN" in l or "FEMMINILE" in l or "WORLD CUP" in l or "FRAUEN" in l or "VROUWEN" in l:
         return "DESCARTAR", "DESCARTAR"
 
-    # 3. EL DICCIONARIO MAESTRO (1 a 1 extraído de tus datos)
-    MAPEO = {
-        "1. HNL": ("Primera División Croacia", "Croacia"),
-        "2. BUNDESLIGA": ("Segunda División Alemania", "Alemania"),
-        "2. HNL": ("Segunda División Croacia", "Croacia"),
-        "3. LIGA": ("Tercera División Alemania", "Alemania"),
-        "A-LEAGUE MEN": ("Primera División Australia", "Australia"),
-        "ALBANIAN KATEGORIA SUPERIORE": ("Primera División Albania", "Albania"),
-        "ALLSVENSKAN": ("Primera División Suecia", "Suecia"),
-        "ANDORRA PRIMERA DIVISIÓ": ("Primera División Andorra", "Andorra"),
-        "ARGENTINA COPA DE LA LIGA": ("Copa de la Liga Profesional Argentina", "Argentina"),
-        "ARGENTINA LPF": ("Primera División Argentina (Liga Profesional)", "Argentina"),
-        "ARGENTINA PRIMERA NACIONAL": ("Segunda División Argentina", "Argentina"),
-        "ARGENTINA RESERVE LEAGUE": ("Liga de Reservas Argentina", "Argentina"),
-        "ARMENIAN PREMIER LEAGUE": ("Primera División Armenia", "Armenia"),
-        "AUSTRALIAN NPLS": ("Ligas Nacionales Premier Australia (Nivel Regional)", "Australia"),
-        "AUSTRIAN 2. LIGA": ("Segunda División Austria", "Austria"),
-        "AUSTRIAN BUNDESLIGA": ("Primera División Austria", "Austria"),
-        "AZERI BIRINCI DASTA": ("Segunda División Azerbaiyán", "Azerbaiyán"),
-        "AZERI PREMYER LIQA": ("Primera División Azerbaiyán", "Azerbaiyán"),
-        "BRI LIGA 1": ("Primera División Indonesia", "Indonesia"),
-        "BAHRAIN PREMIER LEAGUE": ("Primera División Baréin", "Baréin"),
-        "BELARUSIAN 1. DIVISION": ("Segunda División Bielorrusia", "Bielorrusia"),
-        "BELARUSIAN PREMIER LEAGUE": ("Primera División Bielorrusia", "Bielorrusia"),
-        "BELARUSIAN RESERVE LEAGUE": ("Liga de Reservas Bielorrusia", "Bielorrusia"),
-        "BELGIAN FIRST DIVISION B": ("Segunda División Bélgica", "Bélgica"),
-        "BELGIAN PRO LEAGUE": ("Primera División Bélgica", "Bélgica"),
-        "BESTA-DEILD KARLA": ("Primera División Islandia", "Islandia"),
-        "BOLIVIAN LFPB": ("Primera División Bolivia", "Bolivia"),
-        "BOSNIAN PREMIER LEAGUE": ("Primera División Bosnia y Herzegovina", "Bosnia y Herzegovina"),
-        "BOTOLA PRO": ("Primera División Marruecos", "Marruecos"),
-        "BRASILEIRÃO": ("Primera División Brasil", "Brasil"),
-        "BRASILEIRAO": ("Primera División Brasil", "Brasil"),
-        "BRAZIL SERIE B": ("Segunda División Brasil", "Brasil"),
-        "BRAZIL SERIE C": ("Tercera División Brasil", "Brasil"),
-        "BULGARIAN FIRST LEAGUE": ("Primera División Bulgaria", "Bulgaria"),
-        "BUNDESLIGA": ("Primera División Alemania", "Alemania"),
-        "CAMBODIAN PREMIER LEAGUE": ("Primera División Camboya", "Camboya"),
-        "CAMPEONATO DE PORTUGAL": ("Cuarta División Portugal", "Portugal"),
-        "CANADIAN PREMIER LEAGUE": ("Primera División Canadá", "Canadá"),
-        "CAPITAL TERRITORY NPL": ("Liga Regional Australia (Territorio de la Capital)", "Australia"),
-        "CHAMPIONSHIP": ("Segunda División Inglaterra", "Inglaterra"),
-        "CHILEAN PRIMERA B": ("Segunda División Chile", "Chile"),
-        "CHILEAN PRIMERA DIVISION": ("Primera División Chile", "Chile"),
-        "CHILEAN PRIMERA DIVISIÓN": ("Primera División Chile", "Chile"),
-        "CHINA LEAGUE ONE": ("Segunda División China", "China"),
-        "CHINA LEAGUE TWO": ("Tercera División China", "China"),
-        "CHINESE SUPER LEAGUE": ("Primera División China", "China"),
-        "COLOMBIAN PRIMERA A": ("Primera División Colombia", "Colombia"),
-        "COLOMBIAN TORNEO BETPLAY": ("Segunda División Colombia", "Colombia"),
-        "COSTA RICAN PRIMERA DIVISION": ("Primera División Costa Rica", "Costa Rica"),
-        "COSTA RICAN PRIMERA DIVISIÓN": ("Primera División Costa Rica", "Costa Rica"),
-        "CYPRUS 1. DIVISION": ("Primera División Chipre", "Chipre"),
-        "CYPRUS 2. DIVISION": ("Segunda División Chipre", "Chipre"),
-        "CZECH 1. LIGA U19": ("Liga Juvenil Sub-19 República Checa", "República Checa"),
-        "CZECH FNL": ("Segunda División República Checa", "República Checa"),
-        "CZECH FORTUNA LIGA": ("Primera División República Checa", "República Checa"),
-        "CZECH U17 LEAGUE": ("Liga Juvenil Sub-17 República Checa", "República Checa"),
-        "DANISH 1. DIVISION": ("Segunda División Dinamarca", "Dinamarca"),
-        "DANISH 2. DIVISION": ("Tercera División Dinamarca", "Dinamarca"),
-        "DANISH 3. DIVISION": ("Cuarta División Dinamarca", "Dinamarca"),
-        "DANISH U17 DIVISION": ("Liga Juvenil Sub-17 Dinamarca (División)", "Dinamarca"),
-        "DANISH U17 LIGAEN": ("Liga Juvenil Sub-17 Dinamarca (Liga)", "Dinamarca"),
-        "DANISH U19 DIVISION": ("Liga Juvenil Sub-19 Dinamarca (División)", "Dinamarca"),
-        "DANISH U19 LIGAEN": ("Liga Juvenil Sub-19 Dinamarca (Liga)", "Dinamarca"),
-        "ECUADOR LIGA PRO": ("Primera División Ecuador", "Ecuador"),
-        "EERSTE DIVISIE": ("Segunda División Países Bajos", "Países Bajos"),
-        "EGYPTIAN PREMIER LEAGUE": ("Primera División Egipto", "Egipto"),
-        "EKSTRAKLASA": ("Primera División Polonia", "Polonia"),
-        "EL SALVADOR PRIMERA DIVISION": ("Primera División El Salvador", "El Salvador"),
-        "EL SALVADOR PRIMERA DIVISIÓN": ("Primera División El Salvador", "El Salvador"),
-        "ELITESERIEN": ("Primera División Noruega", "Noruega"),
-        "ENGLISH NATIONAL LEAGUE": ("Quinta División Inglaterra", "Inglaterra"),
-        "ENGLISH NATIONAL LEAGUE NORTH SOUTH": ("Sexta División Inglaterra", "Inglaterra"),
-        "ENGLISH NON-LEAGUE PREMIER DIVISION - STEP 7": ("Séptima División Inglaterra", "Inglaterra"),
-        "EREDIVISIE": ("Primera División Países Bajos", "Países Bajos"),
-        "EROVNULI LIGA": ("Primera División Georgia", "Georgia"),
-        "EROVNULI LIGA 2": ("Segunda División Georgia", "Georgia"),
-        "ESTONIA MEISTRILIIGA": ("Primera División Estonia", "Estonia"),
-        "ESTONIAN ESILIIGA A": ("Segunda División Estonia", "Estonia"),
-        "ETTAN": ("Tercera División Suecia", "Suecia"),
-        "FAROE ISLANDS MEISTARADEILDIN": ("Primera División Islas Feroe", "Islas Feroe"),
-        "FRENCH NATIONAL 1": ("Tercera División Francia", "Francia"),
-        "GREEK SUPER LEAGUE": ("Primera División Grecia", "Grecia"),
-        "GREEK SUPER LEAGUE 2": ("Segunda División Grecia", "Grecia"),
-        "GREEK U19 SUPER LEAGUE": ("Liga Juvenil Sub-19 Grecia", "Grecia"),
-        "GUATEMALAN LIGA NACIONAL": ("Primera División Guatemala", "Guatemala"),
-        "HONDURAN LIGA NACIONAL": ("Primera División Honduras", "Honduras"),
-        "HONG KONG PREMIER LEAGUE": ("Primera División Hong Kong", "Hong Kong"),
-        "ICELAND 1. DEILD": ("Segunda División Islandia", "Islandia"),
-        "INDIAN SUPER LEAGUE": ("Primera División India", "India"),
-        "IRISH FIRST DIVISION": ("Segunda División Irlanda", "Irlanda"),
-        "IRISH PREMIER DIVISION": ("Primera División Irlanda", "Irlanda"),
-        "J1": ("Primera División Japón", "Japón"),
-        "J2": ("Segunda División Japón", "Japón"),
-        "J3": ("Tercera División Japón", "Japón"),
-        "JORDAN PRO LEAGUE": ("Primera División Jordania", "Jordania"),
-        "K LEAGUE 1": ("Primera División Corea del Sur", "Corea del Sur"),
-        "K LEAGUE 2": ("Segunda División Corea del Sur", "Corea del Sur"),
-        "K3 LEAGUE": ("Tercera División Corea del Sur", "Corea del Sur"),
-        "K4 LEAGUE": ("Cuarta División Corea del Sur", "Corea del Sur"),
-        "KAZAKH 1. DIVISION": ("Segunda División Kazajistán", "Kazajistán"),
-        "KAZAKH 2. DIVISION": ("Tercera División Kazajistán", "Kazajistán"),
-        "KAZAKH PREMIER LEAGUE": ("Primera División Kazajistán", "Kazajistán"),
-        "KAZAKH U16 LEAGUE": ("Liga Juvenil Sub-16 Kazajistán", "Kazajistán"),
-        "KAZAKH U17 LEAGUE": ("Liga Juvenil Sub-17 Kazajistán", "Kazajistán"),
-        "KAZAKH U18 LEAGUE": ("Liga Juvenil Sub-18 Kazajistán", "Kazajistán"),
-        "KOSOVO SUPERLIGA": ("Primera División Kosovo", "Kosovo"),
-        "KYRGYZ PREMIER LEAGUE": ("Primera División Kirguistán", "Kirguistán"),
-        "LA LIGA": ("Primera División España", "España"),
-        "LA LIGA 2": ("Segunda División España", "España"),
-        "LATVIAN 1. LIGA": ("Segunda División Letonia", "Letonia"),
-        "LATVIAN VIRSLIGA": ("Primera División Letonia", "Letonia"),
-        "LEAGUE ONE": ("Tercera División Inglaterra", "Inglaterra"),
-        "LEAGUE TWO": ("Cuarta División Inglaterra", "Inglaterra"),
-        "LIGA LEUMIT": ("Segunda División Israel", "Israel"),
-        "LIGA MX": ("Primera División México", "México"),
-        "LIGA DE EXPANSION MX": ("Segunda División México", "México"),
-        "LIGA DE EXPANSIÓN MX": ("Segunda División México", "México"),
-        "LIGAT HA'AL": ("Primera División Israel", "Israel"),
-        "LIGUE 1": ("Primera División Francia", "Francia"),
-        "LIGUE 2": ("Segunda División Francia", "Francia"),
-        "LITHUANIAN 1 LYGA": ("Segunda División Lituania", "Lituania"),
-        "LITHUANIAN A LYGA": ("Primera División Lituania", "Lituania"),
-        "LUXEMBOURG NATIONAL DIVISION": ("Primera División Luxemburgo", "Luxemburgo"),
-        "MLS": ("Primera División Estados Unidos", "Estados Unidos"),
-        "MLS NEXT PRO": ("Tercera División Estados Unidos (Liga de Reservas)", "Estados Unidos"),
-        "MALAYSIAN SUPER LEAGUE": ("Primera División Malasia", "Malasia"),
-        "MALTA CHALLENGE LEAGUE": ("Segunda División Malta", "Malta"),
-        "MALTA PREMIER LEAGUE": ("Primera División Malta", "Malta"),
-        "MEXICAN U17 LEAGUE": ("Liga Juvenil Sub-17 México", "México"),
-        "MEXICAN U18 LEAGUE": ("Liga Juvenil Sub-18 México", "México"),
-        "MEXICAN U19 LEAGUE": ("Liga Juvenil Sub-19 México", "México"),
-        "MEXICAN U23 LEAGUE": ("Liga Juvenil Sub-23 México", "México"),
-        "MOLDOVAN SUPER LIGA": ("Primera División Moldavia", "Moldavia"),
-        "MONTENEGRO FIRST LEAGUE": ("Primera División Montenegro", "Montenegro"),
-        "MONTENEGRO SECOND LEAGUE": ("Segunda División Montenegro", "Montenegro"),
-        "NB I": ("Primera División Hungría", "Hungría"),
-        "NB II": ("Segunda División Hungría", "Hungría"),
-        "NCAA D2": ("Fútbol Universitario Estados Unidos División 2", "Estados Unidos"),
-        "NCAA D3": ("Fútbol Universitario Estados Unidos División 3", "Estados Unidos"),
-        "NEW SOUTH WALES NPL": ("Liga Regional Australia (Nueva Gales del Sur)", "Australia"),
-        "NEW ZEALAND NATIONAL LEAGUE": ("Primera División Nueva Zelanda", "Nueva Zelanda"),
-        "NICARAGUA PRIMERA DIVISION": ("Primera División Nicaragua", "Nicaragua"),
-        "NIGERIAN CREATIVE CHAMPIONSHIP": ("Liga de Desarrollo Nigeria", "Nigeria"),
-        "NORTH MACEDONIA FIRST LEAGUE": ("Primera División Macedonia del Norte", "Macedonia del Norte"),
-        "NORTHERN IRISH PREMIERSHIP": ("Primera División Irlanda del Norte", "Irlanda del Norte"),
-        "NORWEGIAN 2. DIVISION": ("Tercera División Noruega", "Noruega"),
-        "OBOS LIGAEN": ("Segunda División Noruega", "Noruega"),
-        "PANAMA LPF": ("Primera División Panamá", "Panamá"),
-        "PARAGUAY DIVISION PROFESIONAL": ("Primera División Paraguay", "Paraguay"),
-        "PERUVIAN LIGA 1": ("Primera División Perú", "Perú"),
-        "POLISH I LIGA": ("Segunda División Polonia", "Polonia"),
-        "POLISH II LIGA": ("Tercera División Polonia", "Polonia"),
-        "PORTUGUESE JUNIORES U17": ("Liga Juvenil Sub-17 Portugal", "Portugal"),
-        "PORTUGUESE JUNIORES U19": ("Liga Juvenil Sub-19 Portugal", "Portugal"),
-        "PORTUGUESE JÚNIORES U17": ("Liga Juvenil Sub-17 Portugal", "Portugal"),
-        "PORTUGUESE JÚNIORES U19": ("Liga Juvenil Sub-19 Portugal", "Portugal"),
-        "PORTUGUESE LIGA 3": ("Tercera División Portugal", "Portugal"),
-        "PORTUGUESE LIGA REVELACAO SUB 23": ("Liga Sub-23 Portugal (Revelación)", "Portugal"),
-        "PORTUGUESE LIGA REVELAÇÃO SUB 23": ("Liga Sub-23 Portugal (Revelación)", "Portugal"),
-        "PORTUGUESE SEGUNDA LIGA": ("Segunda División Portugal", "Portugal"),
-        "PREMIER LEAGUE": ("Primera División Inglaterra", "Inglaterra"),
-        "PREMIER LEAGUE 2": ("Liga de Reservas Inglaterra Sub-21", "Inglaterra"),
-        "PRIMAVERA 1": ("Liga Juvenil Sub-19 Italia", "Italia"),
-        "PRIMEIRA LIGA": ("Primera División Portugal", "Portugal"),
-        "PRIMERA RFEF": ("Tercera División España", "España"),
-        "QATARI STARS LEAGUE": ("Primera División Catar", "Catar"),
-        "QUEENSLAND NPL": ("Liga Regional Australia (Queensland)", "Australia"),
-        "QUEENSLAND PREMIER LEAGUE": ("Segunda Liga Regional Australia (Queensland)", "Australia"),
-        "REGIONALLIGA": ("Cuarta División Alemania", "Alemania"),
-        "ROMANIAN LIGA ELITELOR U17": ("Liga Juvenil Sub-17 Rumania", "Rumania"),
-        "ROMANIAN LIGA II": ("Segunda División Rumania", "Rumania"),
-        "ROMANIAN LIGA TINERET U18": ("Liga Juvenil Sub-18 Rumania", "Rumania"),
-        "ROMANIAN SUPERLIGA": ("Primera División Rumania", "Rumania"),
-        "RUSSIAN FIRST LEAGUE": ("Segunda División Rusia", "Rusia"),
-        "RUSSIAN PREMIER LEAGUE": ("Primera División Rusia", "Rusia"),
-        "SAUDI DIVISION 1": ("Segunda División Arabia Saudita", "Arabia Saudita"),
-        "SAUDI PRO LEAGUE": ("Primera División Arabia Saudita", "Arabia Saudita"),
-        "SCOTTISH CHAMPIONSHIP": ("Segunda División Escocia", "Escocia"),
-        "SCOTTISH LEAGUE ONE": ("Tercera División Escocia", "Escocia"),
-        "SCOTTISH LEAGUE TWO": ("Cuarta División Escocia", "Escocia"),
-        "SCOTTISH PREMIERSHIP": ("Primera División Escocia", "Escocia"),
-        "SEGUNDA RFEF": ("Cuarta División España", "España"),
-        "SERBIAN PRVA LIGA": ("Segunda División Serbia", "Serbia"),
-        "SERBIAN SUPER LIGA": ("Primera División Serbia", "Serbia"),
-        "SERBIAN U17 LEAGUE": ("Liga Juvenil Sub-17 Serbia", "Serbia"),
-        "SERBIAN U19 LEAGUE": ("Liga Juvenil Sub-19 Serbia", "Serbia"),
-        "SERIE A": ("Primera División Italia", "Italia"),
-        "SERIE B": ("Segunda División Italia", "Italia"),
-        "SERIE C": ("Tercera División Italia", "Italia"),
-        "SERIE D - GIRONE A": ("Cuarta División Italia (Grupo A)", "Italia"),
-        "SERIE D - GIRONE B": ("Cuarta División Italia (Grupo B)", "Italia"),
-        "SERIE D - GIRONE C": ("Cuarta División Italia (Grupo C)", "Italia"),
-        "SERIE D - GIRONE D": ("Cuarta División Italia (Grupo D)", "Italia"),
-        "SERIE D - GIRONE E": ("Cuarta División Italia (Grupo E)", "Italia"),
-        "SERIE D - GIRONE F": ("Cuarta División Italia (Grupo F)", "Italia"),
-        "SERIE D - GIRONE G": ("Cuarta División Italia (Grupo G)", "Italia"),
-        "SERIE D - GIRONE H": ("Cuarta División Italia (Grupo H)", "Italia"),
-        "SINGAPORE PREMIER LEAGUE": ("Primera División Singapur", "Singapur"),
-        "SLOVAK 2. LIGA": ("Segunda División Eslovaquia", "Eslovaquia"),
-        "SLOVAK SUPER LIGA": ("Primera División Eslovaquia", "Eslovaquia"),
-        "SLOVAK U19 LEAGUE": ("Liga Juvenil Sub-19 Eslovaquia", "Eslovaquia"),
-        "SLOVENIAN 1. SNL": ("Primera División Eslovenia", "Eslovenia"),
-        "SLOVENIAN 2. SNL": ("Segunda División Eslovenia", "Eslovenia"),
-        "SOUTH AFRICAN PSL": ("Primera División Sudáfrica", "Sudáfrica"),
-        "SOUTH AUSTRALIA NPL": ("Liga Regional Australia (Australia del Sur)", "Australia"),
-        "SOUTH AUSTRALIA STATE LEAGUE 1": ("Segunda Liga Regional Australia (Australia del Sur)", "Australia"),
-        "SUPER LIG": ("Primera División Turquía", "Turquía"),
-        "SUPERETTAN": ("Segunda División Suecia", "Suecia"),
-        "SUPERLIGA": ("Primera División Dinamarca", "Dinamarca"), 
-        "SWISS 1. LIGA CLASSIC": ("Cuarta División Suiza", "Suiza"),
-        "SWISS 1. LIGA PROMOTION": ("Tercera División Suiza", "Suiza"),
-        "SWISS CHALLENGE LEAGUE": ("Segunda División Suiza", "Suiza"),
-        "SWISS SUPER LEAGUE": ("Primera División Suiza", "Suiza"),
-        "SWISS U17 ELITE": ("Liga Juvenil Sub-17 Suiza", "Suiza"),
-        "SWISS U19 ELITE": ("Liga Juvenil Sub-19 Suiza", "Suiza"),
-        "SÜPER LIG": ("Primera División Turquía", "Turquía"),
-        "THAI LEAGUE 1": ("Primera División Tailandia", "Tailandia"),
-        "THAI LEAGUE 2": ("Segunda División Tailandia", "Tailandia"),
-        "TUNISIA LIGUE 1": ("Primera División Túnez", "Túnez"),
-        "TURKISH 1. LIG": ("Segunda División Turquía", "Turquía"),
-        "TWEEDE DIVISIE": ("Tercera División Países Bajos", "Países Bajos"),
-        "U17 BUNDESLIGA": ("Liga Juvenil Sub-17 Alemania", "Alemania"),
-        "U19 BUNDESLIGA": ("Liga Juvenil Sub-19 Alemania", "Alemania"),
-        "UAE PRO LEAGUE": ("Primera División Emiratos Árabes Unidos", "Emiratos Árabes Unidos"),
-        "USL CHAMPIONSHIP": ("Segunda División Estados Unidos", "Estados Unidos"),
-        "USL LEAGUE 1": ("Tercera División Estados Unidos", "Estados Unidos"),
-        "USL LEAGUE ONE": ("Tercera División Estados Unidos", "Estados Unidos"),
-        "UKRAINIAN PERSHA LIGA": ("Segunda División Ucrania", "Ucrania"),
-        "UKRAINIAN PREMIER LEAGUE": ("Primera División Ucrania", "Ucrania"),
-        "UKRAINIAN U19 LEAGUE": ("Liga Juvenil Sub-19 Ucrania", "Ucrania"),
-        "URUGUAY PRIMERA DIVISION": ("Primera División Uruguay", "Uruguay"),
-        "URUGUAY PRIMERA DIVISIÓN": ("Primera División Uruguay", "Uruguay"),
-        "UZBEK SUPER LEAGUE": ("Primera División Uzbekistán", "Uzbekistán"),
-        "V.LEAGUE 1": ("Primera División Vietnam", "Vietnam"),
-        "VEIKKAUSLIIGA": ("Primera División Finlandia", "Finlandia"),
-        "VICTORIA NPL": ("Liga Regional Australia (Victoria)", "Australia"),
-        "WELSH PREMIER LEAGUE": ("Primera División Gales", "Gales"),
-        "WESTERN AUSTRALIA NPL": ("Liga Regional Australia (Australia Occidental)", "Australia"),
-        "YKKONEN": ("Tercera División Finlandia", "Finlandia"),
-        "YKKOSLIIGA": ("Segunda División Finlandia", "Finlandia"),
-        "YKKÖNEN": ("Tercera División Finlandia", "Finlandia"),
-        "YKKÖSLIIGA": ("Segunda División Finlandia", "Finlandia")
-    }
-
     if l in MAPEO:
         return MAPEO[l][0], MAPEO[l][1]
 
-    # Si por algún casual la liga llega sin estar en tu lista, le ponemos "Otros"
     pais_final = pais_raw.title() if isinstance(pais_raw, str) and str(pais_raw).upper() not in ["DESCONOCIDO", "STAT_FILES", "POST_MATCH_APP", "NONE", "NAN", ""] else "Otros"
     return l_original, pais_final
 
@@ -2205,11 +1874,3 @@ async def comparar_h2h(payload: H2HRequest):
             }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-    
-from apscheduler.schedulers.background import BackgroundScheduler
-import atexit
-
-scheduler = BackgroundScheduler()
-scheduler.add_job(func=escanear_mercado_background, trigger="interval", minutes=2)
-scheduler.start()
-atexit.register(lambda: scheduler.shutdown())
